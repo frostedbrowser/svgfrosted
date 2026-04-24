@@ -324,6 +324,9 @@ function setProxyMode(value) {
 	}
 	localStorage.setItem(proxyModeStorage, nextMode);
 	transportReady = false;
+	connection = null;
+	scramjet = null;
+	runtimeInitPromise = null;
 	resetAllTabFrames();
 	loadProxySettings();
 }
@@ -8186,7 +8189,15 @@ function setActiveTab(id, keepView) {
 	} else if (isCreditsInternalUrl(tab.url)) {
 		showCreditsPage();
 	} else {
-		if (frameReadyByTab.has(id)) {
+		var frameEntry = tabFrames.get(id);
+		if (!frameEntry && String(tab.url || "").trim()) {
+			addressInput.value = tab.url;
+			homeSearchInput.value = tab.url;
+			showBlank();
+			setLoadingBannerMessage(getProxyMode());
+			showLoading(true);
+			void loadUrl(tab.url, false);
+		} else if (frameReadyByTab.has(id)) {
 			showFrameForTab(id);
 		} else {
 			showBlank();
