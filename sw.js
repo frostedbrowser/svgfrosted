@@ -11,8 +11,9 @@ if (!self.UVServiceWorker) {
 
 // trying to hard block the new adblock.turtlecute.org scripts (fakeads)
 const { ScramjetServiceWorker } = $scramjetLoadWorker();
-const scramjet = new ScramjetServiceWorker();
 const uvServiceWorker = new UVServiceWorker();
+let scramjet = null;
+const scramjetReadyPromise = initializeScramjetServiceWorker();
 
 const hardBlockedAdKeywords = [
 	"adblock.turtlecute.org/js/pagead.js",
@@ -26,7 +27,14 @@ self.addEventListener("install", () => {
 });
 
 self.addEventListener("activate", (event) => {
-	event.waitUntil(self.clients.claim());
+	event.waitUntil(
+		Promise.all([
+			self.clients.claim(),
+			scramjetReadyPromise.catch((error) => {
+				console.warn("[frosted-sw] scramjet startup recovery failed:", error);
+			}),
+		])
+	);
 });
 
 self.addEventListener("message", (event) => {
@@ -214,6 +222,26 @@ function deleteIndexedDb(databaseName) {
 	});
 }
 
+function validateScramjetDb(db) {
+	const requiredStores = ["config", "cookies", "redirectTrackers", "referrerPolicies", "publicSuffixList"];
+	return requiredStores.every((storeName) => db.objectStoreNames.contains(storeName));
+}
+
+async function ensureScramjetDbReady() {
+	const db = await openScramjetDb();
+	const isValid = validateScramjetDb(db);
+	try {
+		db.close();
+	} catch {}
+	if (isValid) return;
+	console.warn("[frosted-sw] scramjet IndexedDB schema mismatch detected before worker startup; recreating $scramjet database.");
+	await deleteIndexedDb("$scramjet");
+	const recreatedDb = await openScramjetDb();
+	try {
+		recreatedDb.close();
+	} catch {}
+}
+
 function openScramjetDb() {
 	return new Promise((resolve, reject) => {
 		try {
@@ -272,6 +300,17 @@ async function loadScramjetConfigWithRecovery() {
 	}
 }
 
+async function initializeScramjetServiceWorker() {
+	await ensureScramjetDbReady();
+	scramjet = new ScramjetServiceWorker();
+	try {
+		await loadScramjetConfigWithRecovery();
+	} catch (error) {
+		console.warn("[frosted-sw] initial scramjet config load failed:", error);
+	}
+	return scramjet;
+}
+
 async function handleRequest(event) {
 	if (isHardBlockedAdRequest(event.request)) {
 		return new Response("Blocked by Frosted adblockdY'-", {
@@ -290,6 +329,7 @@ async function handleRequest(event) {
 
 	if (isScramjetRequest(event.request.url) || isScramjetWasmRequest(event.request.url)) {
 		try {
+			await scramjetReadyPromise;
 			await loadScramjetConfigWithRecovery();
 			if (scramjet.route(event)) {
 				return await scramjet.fetch(event);
