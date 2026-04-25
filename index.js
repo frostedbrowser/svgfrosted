@@ -442,28 +442,12 @@ var appBasePath = (() => {
 	return path.replace(/\/{2,}/g, "/");
 })();
 
-function getForcedProxyOrigin() {
-	try {
-		var raw = String(window?._CONFIG?.PROXY_ORIGIN || window?.PROXY_ORIGIN || "https://stellite.games").trim();
-		if (!raw) return "https://stellite.games";
-		var parsed = new URL(raw, window.location.href);
-		if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "https://stellite.games";
-		return `${parsed.protocol}//${parsed.host}`;
-	} catch {
-		return "https://stellite.games";
-	}
-}
-
-var proxyOrigin = getForcedProxyOrigin();
-
-var scramjetPathPrefix = "/scramjet/";
-
 var scramjetPrefix = (() => {
-	return `${proxyOrigin}${scramjetPathPrefix}`;
+	return `${appBasePath}scramjet/`.replace(/\/{2,}/g, "/");
 })();
 
 var uvPrefix = (() => {
-	return "/uv/service/";
+	return `${appBasePath}uv/service/`.replace(/\/{2,}/g, "/");
 })();
 
 function hintAssetOnce(rel, href, asType, crossOrigin = false) {
@@ -9060,9 +9044,10 @@ function isScramjetTransportCrash(error) {
 }
 
 function toScramjetProxyUrl(rawUrl) {
+	var base = String(window.location.origin || "").replace(/\/+$/, "");
 	var target = String(rawUrl || "").trim();
-	if (!target) return "";
-	return `${scramjetPrefix}${encodeURIComponent(target)}`;
+	if (!base || !target) return "";
+	return `${base}${scramjetPrefix}${encodeURIComponent(target)}`;
 }
 
 function fromScramjetProxyUrl(rawUrl) {
@@ -9070,7 +9055,7 @@ function fromScramjetProxyUrl(rawUrl) {
 	if (!target) return "";
 	try {
 		var parsed = new URL(target, window.location.href);
-		var marker = scramjetPathPrefix;
+		var marker = scramjetPrefix;
 		if (!parsed.pathname.startsWith(marker)) {
 			if (!parsed.pathname.startsWith("/scramjet/")) return target;
 			marker = "/scramjet/";
@@ -9384,8 +9369,8 @@ function ensureTabFrame(tabId) {
 					if (!window.__uv$config?.encodeUrl) {
 						throw new Error("Ultraviolet runtime is not ready.");
 					}
-					var prefix = uvPrefix;
-					created.frame.src = proxyOrigin + prefix + window.__uv$config.encodeUrl(url);
+					var prefix = window.__uv$config?.prefix || uvPrefix;
+					created.frame.src = window.location.origin + prefix + window.__uv$config.encodeUrl(url);
 				},
 			}
 			: scramjet.createFrame();
