@@ -442,7 +442,7 @@ body.has-video-wallpaper .wallpaper-video.is-active {
 	flex-direction: column;
 	justify-content: flex-start;
 	gap: 0.44rem;
-	z-index: 55;
+	z-index: 10010;
 	opacity: 0;
 	visibility: hidden;
 	pointer-events: none;
@@ -450,6 +450,7 @@ body.has-video-wallpaper .wallpaper-video.is-active {
 	transition:
 		opacity var(--motion-med) var(--motion-ease),
 		transform var(--motion-med) var(--motion-ease);
+	font-family: "Nunito", var(--font-ui);
 }
 
 .action-menu.open {
@@ -477,7 +478,7 @@ body.has-video-wallpaper .wallpaper-video.is-active {
 	border: 2px solid rgba(255, 255, 255, 0.24);
 	background: rgba(15, 22, 33, 0.95);
 	color: rgba(236, 244, 255, 0.94);
-	font-family: var(--font-ui);
+	font-family: "Nunito", var(--font-ui);
 	font-size: 0;
 	font-weight: 700;
 	letter-spacing: 0;
@@ -531,8 +532,9 @@ body.has-video-wallpaper .wallpaper-video.is-active {
 	border: 1px solid transparent;
 	background: transparent;
 	color: rgba(241, 247, 255, 0.95);
-	font-family: "Poppins", system-ui, sans-serif;
+	font-family: "Nunito", var(--font-ui);
 	font-size: 1.08rem;
+	font-weight: 500;
 	line-height: 1;
 	text-align: center;
 	display: flex;
@@ -561,6 +563,13 @@ body.has-video-wallpaper .wallpaper-video.is-active {
 
 .action-menu-item i {
 	font-size: 0.98rem;
+}
+
+.action-menu-item img {
+	width: 16px;
+	height: 16px;
+	display: block;
+	object-fit: contain;
 }
 
 .action-menu.is-closed {
@@ -594,15 +603,24 @@ body.has-video-wallpaper .wallpaper-video.is-active {
 	pointer-events: none;
 }
 
-#adsToggleBtn,
 #actionNewTabBtn,
 #aiBtn {
 	display: none !important;
 }
 
+#adsToggleBtn {
+	font-size: 0.64rem;
+	font-weight: 600;
+	letter-spacing: 0.01em;
+	text-transform: uppercase;
+	border: 1px solid rgba(255, 140, 140, 0.36);
+	background: rgba(86, 26, 26, 0.55);
+	color: rgba(255, 225, 225, 0.96);
+}
+
 .action-menu-item-code {
 	font-size: 0.74rem;
-	font-weight: 700;
+	font-weight: 600;
 	letter-spacing: 0.01em;
 	margin-top: auto;
 }
@@ -615,7 +633,7 @@ body.has-video-wallpaper .wallpaper-video.is-active {
 	position: fixed;
 	left: 0;
 	top: 0;
-	z-index: 80;
+	z-index: 10011;
 	display: flex;
 	flex-direction: column;
 	gap: 0.26rem;
@@ -672,6 +690,13 @@ body.has-video-wallpaper .wallpaper-video.is-active {
 
 .action-menu-item[aria-pressed="false"] {
 	color: rgba(255, 210, 210, 0.95);
+}
+
+#adsToggleBtn[aria-pressed="true"] {
+	background: linear-gradient(165deg, rgba(53, 122, 255, 0.58), rgba(33, 86, 196, 0.52));
+	border-color: rgba(167, 206, 255, 0.5);
+	color: #eef5ff;
+	box-shadow: 0 6px 16px rgba(23, 69, 165, 0.24);
 }
 
 @media (max-width: 900px) {
@@ -792,7 +817,7 @@ body.has-video-wallpaper .wallpaper-video.is-active {
 .loading-banner.show {
 	opacity: 1;
 	visibility: visible;
-	pointer-events: auto;
+	pointer-events: none;
 }
 
 .loading-popup {
@@ -1649,6 +1674,14 @@ body.has-video-wallpaper .home-search-icon {
 	font-family: inherit;
 }
 
+#homeSearchInput:focus-visible {
+	outline: none;
+}
+
+#addressInput:focus-visible {
+	outline: none;
+}
+
 body.has-video-wallpaper .home-search input {
 	color: rgba(246, 250, 255, 0.96);
 }
@@ -1785,6 +1818,42 @@ body.has-video-wallpaper .home-search input::placeholder {
 .modal-body {
 	overflow-y: auto;
 	padding: 0.4rem 0;
+}
+
+.update-popup-body {
+	padding: 1rem;
+	display: grid;
+	gap: 0.65rem;
+	text-align: center;
+	justify-items: center;
+}
+
+.update-popup-title {
+	font-size: 0.96rem;
+	font-weight: 700;
+	color: #f6f8ff;
+}
+
+.update-popup-copy {
+	font-size: 0.78rem;
+	color: var(--muted);
+	line-height: 1.45;
+}
+
+.update-popup-list {
+	margin: 0.2rem 0 0;
+	padding-left: 0;
+	list-style-position: inside;
+	display: grid;
+	gap: 0.25rem;
+	font-size: 0.76rem;
+	color: #dfe8ff;
+}
+
+.update-popup-actions {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: 0.2rem;
 }
 
 .history-item {
@@ -1945,7 +2014,7 @@ body.has-video-wallpaper .home-search input::placeholder {
 }
 
 .ai-chat {
-	padding: 1.15rem;
+	padding: 1.15rem 1.15rem 5.2rem 3rem;
 	display: flex;
 	flex-direction: column;
 	gap: 0.7rem;
@@ -2035,6 +2104,7 @@ body.has-video-wallpaper .home-search input::placeholder {
 
 .ai-msg-content {
 	display: block;
+	padding-left: 0.38rem;
 	white-space: pre-wrap;
 	word-break: break-word;
 }
@@ -2099,19 +2169,46 @@ body.has-video-wallpaper .home-search input::placeholder {
 
 .ai-prompt-wrap {
 	display: flex;
+	align-items: center;
 	gap: 0.55rem;
 	margin-top: auto;
-	padding-top: 0.2rem;
 	position: sticky;
 	bottom: 0;
-	background: linear-gradient(180deg, transparent, var(--bg-card) 18%);
-	padding-bottom: 0.2rem;
+	background: linear-gradient(180deg, transparent, rgba(8, 20, 39, 0.28) 34%, rgba(8, 20, 39, 0.42));
+	padding: 0.28rem 0;
+	border: none;
+	border-radius: 0;
+	box-shadow: none;
 }
 
 .ai-prompt {
 	flex: 1;
 	min-height: 46px;
 	padding: 0.75rem 0.9rem;
+	border: 1px solid rgba(255, 255, 255, 0.14);
+	border-radius: 0.72rem;
+	background: rgba(8, 18, 33, 0.68);
+	outline: none;
+	box-shadow: none;
+}
+
+#aiSolveBtn {
+	min-height: 46px;
+	padding: 0.7rem 1rem;
+	border-radius: 0.72rem;
+	border: 1px solid rgba(255, 255, 255, 0.14);
+	background: linear-gradient(180deg, rgba(16, 34, 61, 0.9), rgba(10, 24, 45, 0.9));
+	box-shadow: none;
+}
+
+#aiSolveBtn:hover {
+	border-color: rgba(255, 255, 255, 0.22);
+}
+
+.ai-prompt:focus-visible,
+#aiSolveBtn:focus-visible {
+	outline: 2px solid rgba(155, 205, 255, 0.55);
+	outline-offset: 1px;
 }
 
 @media (max-height: 720px) {

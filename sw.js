@@ -12,15 +12,53 @@ if (!self.UVServiceWorker) {
 // trying to hard block the new adblock.turtlecute.org scripts (fakeads)
 const { ScramjetServiceWorker } = $scramjetLoadWorker();
 const uvServiceWorker = new UVServiceWorker();
-let scramjet = null;
+// Scramjet must attach its internal message handler during initial SW evaluation.
+let scramjet = new ScramjetServiceWorker();
 let scramjetCircuitOpen = false;
-const scramjetReadyPromise = initializeScramjetServiceWorker();
+let scramjetReadyPromise = Promise.resolve(null);
+let scramjetUnhandledSchemaMismatchSeen = false;
+
+self.addEventListener("unhandledrejection", (event) => {
+	const reason = event?.reason;
+	const stack = String(reason?.stack || "");
+	if (!isMissingObjectStoreError(reason)) return;
+	if (!stack.includes("scramjet.all.js")) return;
+	event.preventDefault();
+	if (scramjetUnhandledSchemaMismatchSeen) return;
+	scramjetUnhandledSchemaMismatchSeen = true;
+	console.warn(
+		"[frosted-sw] intercepted early scramjet IndexedDB schema mismatch; continuing with serialized startup recovery."
+	);
+});
 
 const hardBlockedAdKeywords = [
 	"adblock.turtlecute.org/js/pagead.js",
 	"adblock.turtlecute.org/js/widget/ads.js",
 	"https%3a%2f%2fadblock.turtlecute.org%2fjs%2fpagead.js",
 	"https%3a%2f%2fadblock.turtlecute.org%2fjs%2fwidget%2fads.js",
+	"api-adservices.apple.com",
+	"iadsdk.apple.com",
+	"metrics.icloud.com",
+	"metrics.mzstatic.com",
+	"adtech.yahooinc.com",
+	"unityads.unity3d.com",
+	"auction.unityads.unity3d.com",
+	"webview.unityads.unity3d.com",
+	"config.unityads.unity3d.com",
+	"adserver.unityads.unity3d.com",
+	"bdapi-ads.realmemobile.com",
+	"bdapi-in-ads.realmemobile.com",
+	"iot-eu-logser.realme.com",
+	"iot-logser.realme.com",
+	"adsfs.oppomobile.com",
+	"adx.ads.oppomobile.com",
+	"ck.ads.oppomobile.com",
+	"data.ads.oppomobile.com",
+];
+const hardAllowedAdUrlPatterns = [
+	/^https?:\/\/cdn\.r9x\.in\/ailogic_gn-math\.dev_obf\.js(?:[?#].*)?$/i,
+	/^https?:\/\/cdn\.r9x\.in\/geo\.js(?:[?#].*)?$/i,
+	/^https?:\/\/(?:[^/]+\.)?jsdelivr\.net\/.+$/i,
 ];
 
 self.addEventListener("install", () => {
@@ -43,6 +81,8 @@ self.addEventListener("message", (event) => {
 		self.skipWaiting();
 	}
 });
+
+scramjetReadyPromise = initializeScramjetServiceWorker();
 
 function matchesHardBlockedKeyword(rawValue) {
 	const source = String(rawValue || "").trim();
@@ -93,6 +133,17 @@ function shouldBypassScramjet(request) {
 	return false;
 }
 
+function isHardAllowedAdRequest(request) {
+	try {
+		const rawUrl = String(request?.url || "").trim();
+		if (!rawUrl) return false;
+		const parsed = new URL(rawUrl);
+		const href = parsed.href.toLowerCase();
+		return hardAllowedAdUrlPatterns.some((pattern) => pattern.test(href));
+	} catch {}
+	return false;
+}
+
 function getAppBasePath() {
 	try {
 		var path = String(self.location.pathname || "/").replace(/\/[^/]*$/, "/");
@@ -105,6 +156,23 @@ function getAppBasePath() {
 
 function getScramjetPrefixPath() {
 	return `${getAppBasePath()}scramjet/`.replace(/\/{2,}/g, "/");
+}
+
+function getDefaultScramjetCodecConfig() {
+	return {
+		encode: "(value) => (value ? encodeURIComponent(value) : value)",
+		decode: "(value) => (value ? decodeURIComponent(value) : value)",
+	};
+}
+
+function normalizeScramjetCodecValue(value, fallback) {
+	if (typeof value === "function") {
+		return value.toString();
+	}
+	if (typeof value === "string" && value.trim()) {
+		return value;
+	}
+	return fallback;
 }
 
 function getDefaultScramjetConfig() {
@@ -145,20 +213,19 @@ function getDefaultScramjetConfig() {
 			allowFailedIntercepts: true,
 		},
 		siteFlags: {},
-		codec: {
-			encode: (value) => (value ? encodeURIComponent(value) : value),
-			decode: (value) => (value ? decodeURIComponent(value) : value),
-		},
+		codec: getDefaultScramjetCodecConfig(),
 	};
 }
 
 function getPersistableScramjetConfig(config) {
+	const normalized = normalizeScramjetConfig(config);
 	return {
-		prefix: config.prefix,
-		globals: { ...(config.globals || {}) },
-		files: { ...(config.files || {}) },
-		flags: { ...(config.flags || {}) },
-		siteFlags: { ...(config.siteFlags || {}) },
+		prefix: normalized.prefix,
+		globals: { ...(normalized.globals || {}) },
+		files: { ...(normalized.files || {}) },
+		flags: { ...(normalized.flags || {}) },
+		siteFlags: { ...(normalized.siteFlags || {}) },
+		codec: { ...(normalized.codec || {}) },
 	};
 }
 
@@ -172,8 +239,15 @@ function normalizeScramjetConfig(config) {
 		files: { ...defaults.files, ...(candidate.files || {}) },
 		flags: { ...defaults.flags, ...(candidate.flags || {}) },
 		siteFlags: { ...defaults.siteFlags, ...(candidate.siteFlags || {}) },
-		codec: defaults.codec,
+		codec: {
+			encode: normalizeScramjetCodecValue(candidate.codec?.encode, defaults.codec.encode),
+			decode: normalizeScramjetCodecValue(candidate.codec?.decode, defaults.codec.decode),
+		},
 	};
+}
+
+function hasValidScramjetCodec(config) {
+	return Boolean(config?.codec?.encode && config?.codec?.decode);
 }
 
 function isUvRequest(requestUrl) {
@@ -266,6 +340,16 @@ function isMissingObjectStoreError(error) {
 	);
 }
 
+function isDbConnectionClosedError(error) {
+	const name = String(error?.name || "");
+	const message = String(error?.message || "").toLowerCase();
+	return name === "AbortError" || message.includes("connection was closed");
+}
+
+function delay(ms) {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function deleteIndexedDb(databaseName) {
 	return new Promise((resolve, reject) => {
 		try {
@@ -292,11 +376,28 @@ async function ensureScramjetDbReady() {
 	} catch {}
 	if (isValid) return;
 	console.warn("[frosted-sw] scramjet IndexedDB schema mismatch detected before worker startup; recreating $scramjet database.");
-	await deleteIndexedDb("$scramjet");
-	const recreatedDb = await openScramjetDb();
-	try {
-		recreatedDb.close();
-	} catch {}
+	await resetScramjetDbWithRetry();
+}
+
+async function resetScramjetDbWithRetry() {
+	for (let attempt = 1; attempt <= 3; attempt++) {
+		try {
+			const deleted = await deleteIndexedDb("$scramjet");
+			if (deleted === false) {
+				await delay(60 * attempt);
+				continue;
+			}
+			const recreatedDb = await openScramjetDb();
+			try {
+				recreatedDb.close();
+			} catch {}
+			return true;
+		} catch (error) {
+			if (!isDbConnectionClosedError(error)) throw error;
+			await delay(60 * attempt);
+		}
+	}
+	return false;
 }
 
 function openScramjetDb() {
@@ -319,6 +420,27 @@ function openScramjetDb() {
 	});
 }
 
+async function readPersistedScramjetConfig() {
+	const db = await openScramjetDb();
+	try {
+		return await new Promise((resolve, reject) => {
+			try {
+				var tx = db.transaction(["config"], "readonly");
+				var request = tx.objectStore("config").get("config");
+				request.onsuccess = () => resolve(request.result || null);
+				request.onerror = () => reject(request.error || new Error("Failed to read scramjet config."));
+				tx.onabort = () => reject(tx.error || new Error("Reading scramjet config was aborted."));
+			} catch (error) {
+				reject(error);
+			}
+		});
+	} finally {
+		try {
+			db.close();
+		} catch {}
+	}
+}
+
 async function persistScramjetConfig(config) {
 	const db = await openScramjetDb();
 	await new Promise((resolve, reject) => {
@@ -337,16 +459,49 @@ async function persistScramjetConfig(config) {
 	} catch {}
 }
 
+async function repairPersistedScramjetConfig() {
+	const storedConfig = await readPersistedScramjetConfig();
+	const normalizedConfig = normalizeScramjetConfig(storedConfig);
+	if (
+		!storedConfig ||
+		!storedConfig.prefix ||
+		!storedConfig.files ||
+		!hasValidScramjetCodec(storedConfig)
+	) {
+		await persistScramjetConfig(getPersistableScramjetConfig(normalizedConfig));
+	}
+	return normalizedConfig;
+}
+
 async function loadScramjetConfigWithRecovery() {
+	let repairedConfig;
+	try {
+		repairedConfig = await repairPersistedScramjetConfig();
+	} catch (error) {
+		if (!isMissingObjectStoreError(error) && !isDbConnectionClosedError(error)) throw error;
+		console.warn("[frosted-sw] scramjet config store unavailable during repair; retrying with fresh database.");
+		const resetWorked = await resetScramjetDbWithRetry();
+		if (!resetWorked) throw error;
+		repairedConfig = getDefaultScramjetConfig();
+		await persistScramjetConfig(getPersistableScramjetConfig(repairedConfig));
+	}
 	try {
 		await scramjet.loadConfig();
 	} catch (error) {
-		if (!isMissingObjectStoreError(error)) throw error;
-		console.warn("[frosted-sw] scramjet IndexedDB schema mismatch detected; recreating $scramjet database.");
-		await deleteIndexedDb("$scramjet");
-		await scramjet.loadConfig();
+		if (isMissingObjectStoreError(error) || isDbConnectionClosedError(error)) {
+			console.warn("[frosted-sw] scramjet IndexedDB/config unavailable; recreating $scramjet database.");
+			const resetWorked = await resetScramjetDbWithRetry();
+			if (!resetWorked) throw error;
+			await persistScramjetConfig(getPersistableScramjetConfig(getDefaultScramjetConfig()));
+			await scramjet.loadConfig();
+		} else if (hasValidScramjetCodec(repairedConfig)) {
+			console.warn("[frosted-sw] recovered malformed scramjet config from IndexedDB.");
+			scramjet.config = repairedConfig;
+		} else {
+			throw error;
+		}
 	}
-	scramjet.config = normalizeScramjetConfig(scramjet.config);
+	scramjet.config = normalizeScramjetConfig(scramjet.config || repairedConfig);
 	if (!scramjet.config?.prefix) {
 		scramjet.config = getDefaultScramjetConfig();
 	}
@@ -359,7 +514,6 @@ async function loadScramjetConfigWithRecovery() {
 
 async function initializeScramjetServiceWorker() {
 	await ensureScramjetDbReady();
-	scramjet = new ScramjetServiceWorker();
 	try {
 		await loadScramjetConfigWithRecovery();
 	} catch (error) {
@@ -370,6 +524,22 @@ async function initializeScramjetServiceWorker() {
 }
 
 async function handleRequest(event) {
+	if (isHardAllowedAdRequest(event.request)) {
+		try {
+			return await fetch(event.request);
+		} catch (error) {
+			console.warn("[frosted-sw] hard-allow fetch failed:", event.request.url, error);
+			return new Response("Upstream request failed.", {
+				status: 502,
+				statusText: "Upstream Fetch Error",
+				headers: {
+					"content-type": "text/plain; charset=utf-8",
+					"cache-control": "no-store",
+				},
+			});
+		}
+	}
+
 	if (isHardBlockedAdRequest(event.request)) {
 		return new Response("Blocked by Frosted adblockdY'-", {
 			status: 403,
@@ -424,10 +594,34 @@ async function handleRequest(event) {
 	}
 
 	if (shouldBypassScramjet(event.request)) {
-		return fetch(event.request);
+		try {
+			return await fetch(event.request);
+		} catch (error) {
+			console.warn("[frosted-sw] bypass fetch failed:", event.request.url, error);
+			return new Response("Upstream request failed.", {
+				status: 502,
+				statusText: "Upstream Fetch Error",
+				headers: {
+					"content-type": "text/plain; charset=utf-8",
+					"cache-control": "no-store",
+				},
+			});
+		}
 	}
 
-	return fetch(event.request);
+	try {
+		return await fetch(event.request);
+	} catch (error) {
+		console.warn("[frosted-sw] direct fetch failed:", event.request.url, error);
+		return new Response("Upstream request failed.", {
+			status: 502,
+			statusText: "Upstream Fetch Error",
+			headers: {
+				"content-type": "text/plain; charset=utf-8",
+				"cache-control": "no-store",
+			},
+		});
+	}
 }
 
 self.addEventListener("fetch", (event) => {
