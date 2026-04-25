@@ -456,8 +456,10 @@ function getForcedProxyOrigin() {
 
 var proxyOrigin = getForcedProxyOrigin();
 
+var scramjetPathPrefix = "/scramjet/";
+
 var scramjetPrefix = (() => {
-	return "/scramjet/";
+	return `${proxyOrigin}${scramjetPathPrefix}`;
 })();
 
 var uvPrefix = (() => {
@@ -9058,10 +9060,9 @@ function isScramjetTransportCrash(error) {
 }
 
 function toScramjetProxyUrl(rawUrl) {
-	var base = String(proxyOrigin || window.location.origin || "").replace(/\/+$/, "");
 	var target = String(rawUrl || "").trim();
-	if (!base || !target) return "";
-	return `${base}${scramjetPrefix}${encodeURIComponent(target)}`;
+	if (!target) return "";
+	return `${scramjetPrefix}${encodeURIComponent(target)}`;
 }
 
 function fromScramjetProxyUrl(rawUrl) {
@@ -9069,7 +9070,7 @@ function fromScramjetProxyUrl(rawUrl) {
 	if (!target) return "";
 	try {
 		var parsed = new URL(target, window.location.href);
-		var marker = scramjetPrefix;
+		var marker = scramjetPathPrefix;
 		if (!parsed.pathname.startsWith(marker)) {
 			if (!parsed.pathname.startsWith("/scramjet/")) return target;
 			marker = "/scramjet/";
