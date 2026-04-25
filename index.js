@@ -442,12 +442,26 @@ var appBasePath = (() => {
 	return path.replace(/\/{2,}/g, "/");
 })();
 
+function getForcedProxyOrigin() {
+	try {
+		var raw = String(window?._CONFIG?.PROXY_ORIGIN || window?.PROXY_ORIGIN || "https://stellite.games").trim();
+		if (!raw) return "https://stellite.games";
+		var parsed = new URL(raw, window.location.href);
+		if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "https://stellite.games";
+		return `${parsed.protocol}//${parsed.host}`;
+	} catch {
+		return "https://stellite.games";
+	}
+}
+
+var proxyOrigin = getForcedProxyOrigin();
+
 var scramjetPrefix = (() => {
-	return `${appBasePath}scramjet/`.replace(/\/{2,}/g, "/");
+	return "/scramjet/";
 })();
 
 var uvPrefix = (() => {
-	return `${appBasePath}uv/service/`.replace(/\/{2,}/g, "/");
+	return "/uv/service/";
 })();
 
 function hintAssetOnce(rel, href, asType, crossOrigin = false) {
@@ -9044,7 +9058,7 @@ function isScramjetTransportCrash(error) {
 }
 
 function toScramjetProxyUrl(rawUrl) {
-	var base = String(window.location.origin || "").replace(/\/+$/, "");
+	var base = String(proxyOrigin || window.location.origin || "").replace(/\/+$/, "");
 	var target = String(rawUrl || "").trim();
 	if (!base || !target) return "";
 	return `${base}${scramjetPrefix}${encodeURIComponent(target)}`;
@@ -9369,8 +9383,8 @@ function ensureTabFrame(tabId) {
 					if (!window.__uv$config?.encodeUrl) {
 						throw new Error("Ultraviolet runtime is not ready.");
 					}
-					var prefix = window.__uv$config?.prefix || uvPrefix;
-					created.frame.src = window.location.origin + prefix + window.__uv$config.encodeUrl(url);
+					var prefix = uvPrefix;
+					created.frame.src = proxyOrigin + prefix + window.__uv$config.encodeUrl(url);
 				},
 			}
 			: scramjet.createFrame();
