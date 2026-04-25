@@ -379,17 +379,6 @@ function probeBareMuxSharedWorker(timeoutMs = 1200) {
 	});
 }
 
-function createBareMuxPortForServiceWorker() {
-	try {
-		if (typeof window.SharedWorker !== "function") return null;
-		var sharedWorker = new SharedWorker(`${appBasePath}baremux/worker.js`, "bare-mux-worker");
-		sharedWorker.port.start?.();
-		return sharedWorker.port || null;
-	} catch {
-		return null;
-	}
-}
-
 async function canUseScramjetReliably() {
 	try {
 		if (typeof window.SharedWorker !== "function") return false;
@@ -7749,14 +7738,6 @@ function bindServiceWorkerProxyFallbackListener() {
 	if (!("serviceWorker" in navigator)) return;
 	navigator.serviceWorker.addEventListener("message", (event) => {
 		var data = event?.data || {};
-		if (String(data.type || "") === "getPort" && data.port) {
-			try {
-				var responsePort = data.port;
-				var sharedWorkerPort = createBareMuxPortForServiceWorker();
-				responsePort.postMessage(sharedWorkerPort || null, sharedWorkerPort ? [sharedWorkerPort] : []);
-			} catch {}
-			return;
-		}
 		if (String(data.type || "") !== "frosted:proxy-fallback") return;
 		if (String(data.proxy || "") !== "ultraviolet") return;
 		if (proxyStatus) {
@@ -12401,4 +12382,3 @@ setTimeout(hideInitialLoadingPopup, 1200);
 
 
 // gooncoded :heartbroken:
-

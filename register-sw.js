@@ -1,5 +1,5 @@
 "use strict";
-const stockSW = "./sw.js?v=9";
+const stockSW = "./sw.js?v=10";
 const swReadyTimeoutMs = 4000;
 
 /**
@@ -34,6 +34,44 @@ function withTimeout(promise, timeoutMs, fallbackValue = null) {
 				reject(error);
 			}
 		);
+	});
+}
+
+function getAppBasePath() {
+	try {
+		var path = String(window.location.pathname || "/").replace(/\/[^/]*$/, "/");
+		if (!path.startsWith("/")) path = `/${path}`;
+		return path.replace(/\/{2,}/g, "/");
+	} catch {
+		return "/";
+	}
+}
+
+function createBareMuxPortForServiceWorker() {
+	try {
+		if (typeof window.SharedWorker !== "function") return null;
+		var worker = new SharedWorker(`${getAppBasePath()}baremux/worker.js`, "bare-mux-worker");
+		worker.port.start?.();
+		return worker.port || null;
+	} catch {
+		return null;
+	}
+}
+
+function bindBareMuxServiceWorkerPortBridge() {
+	if (typeof navigator === "undefined" || !navigator.serviceWorker) return;
+	if (window.__frostedBareMuxPortBridgeBound) return;
+	window.__frostedBareMuxPortBridgeBound = true;
+	navigator.serviceWorker.addEventListener("message", (event) => {
+		var data = event?.data || {};
+		if (String(data.type || "") !== "getPort") return;
+		var replyPort = data.port;
+		if (!replyPort) return;
+		try {
+			var sharedWorkerPort = createBareMuxPortForServiceWorker();
+			if (!sharedWorkerPort) return;
+			replyPort.postMessage(sharedWorkerPort, [sharedWorkerPort]);
+		} catch {}
 	});
 }
 
@@ -73,5 +111,6 @@ async function registerSW() {
 }
 
 if (typeof window !== "undefined") {
+	bindBareMuxServiceWorkerPortBridge();
 	window.registerSW = registerSW;
 }
