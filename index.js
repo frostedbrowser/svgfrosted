@@ -431,6 +431,7 @@ function setProxyMode(value) {
 	connection = null;
 	scramjet = null;
 	runtimeInitPromise = null;
+	scramjetInitPromise = null;
 	resetAllTabFrames();
 	loadProxySettings();
 }
@@ -477,6 +478,7 @@ function prefetchProxyAssets() {
 var scramjet = null;
 var connection = null;
 var runtimeInitPromise = null;
+var scramjetInitPromise = null;
 var uvRuntimePromise = null;
 var tabs = [];
 var activeTabId = null;
@@ -608,13 +610,33 @@ async function initializeProxyRuntime() {
 	if (getProxyMode() === "ultraviolet") {
 		await ensureUvRuntime();
 	}
-	if (scramjet && connection) return { scramjet, connection };
-	if (runtimeInitPromise) return runtimeInitPromise;
+	if (runtimeInitPromise) {
+		await runtimeInitPromise;
+	} else {
+		runtimeInitPromise = (async () => {
+			var bareMuxModule = await ensureBareMuxGlobal();
+			connection = createBareMuxConnection(bareMuxModule);
+			await registerSW();
+			return { connection };
+		})().catch((error) => {
+			runtimeInitPromise = null;
+			connection = null;
+			throw error;
+		});
+		await runtimeInitPromise;
+	}
 
-	runtimeInitPromise = (async () => {
-		var bareMuxModule = await ensureBareMuxGlobal();
-		connection = createBareMuxConnection(bareMuxModule);
-		await registerSW();
+	if (getProxyMode() !== "scramjet") {
+		return { scramjet: null, connection };
+	}
+	if (scramjet && connection) return { scramjet, connection };
+
+	if (scramjetInitPromise) {
+		await scramjetInitPromise;
+		return { scramjet, connection };
+	}
+
+	scramjetInitPromise = (async () => {
 		if (typeof window.$scramjetLoadController !== "function") {
 			await loadScriptOnce(`${appBasePath}scram/scramjet.all.js?v=6`);
 		}
@@ -645,13 +667,13 @@ async function initializeProxyRuntime() {
 		}
 		return { scramjet, connection };
 	})().catch((error) => {
-		runtimeInitPromise = null;
+		scramjetInitPromise = null;
 		scramjet = null;
-		connection = null;
 		throw error;
 	});
 
-	return runtimeInitPromise;
+	await scramjetInitPromise;
+	return { scramjet, connection };
 }
 
 const GAMES_JSON = [
