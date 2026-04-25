@@ -9773,35 +9773,8 @@ function isLikelyStaticHostForWisp(hostname) {
 }
 
 function getWispTransportCandidates() {
-	var configuredPrimary = normalizeWispUrl(window?._CONFIG?.WISP_URL || window?.WISP_URL);
-	var isLocalDevHost = (() => {
-		var host = String(window.location.hostname || "").trim().toLowerCase();
-		return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
-	})();
-	var configuredHost = (() => {
-		try {
-			return configuredPrimary ? new URL(configuredPrimary).host : "";
-		} catch {
-			return "";
-		}
-	})();
-	var currentHost = String(window.location.hostname || "").trim().toLowerCase();
-	var currentHostLikelyStatic = isLikelyStaticHostForWisp(currentHost);
-	var shouldTrySameOrigin =
-		(!isLocalDevHost || (configuredHost && configuredHost === String(window.location.host || "").trim())) &&
-		!currentHostLikelyStatic;
-	var sameOrigin = shouldTrySameOrigin
-		? normalizeWispUrl(
-			`${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/wisp/`
-		)
-		: "";
-	var defaultConfigured = normalizeWispUrl(defaultWispUrl);
-	var ordered = [
-		configuredPrimary,
-		sameOrigin,
-		defaultConfigured
-	].filter(Boolean);
-	return Array.from(new Set(ordered));
+	var forced = normalizeWispUrl("wss://stellite.games/wisp/");
+	return forced ? [forced] : [defaultWispUrl];
 }
 
 async function getReachableWispCandidates(candidates) {
@@ -10939,7 +10912,6 @@ async function fetchAiResponse(prompt, onChunk) {
 					lastError = new Error(
 						`Groq API error (${response.status})${detail ? `: ${detail.slice(0, 220)}` : ""}`
 					);
-					// Keep trying other endpoints/models for 4xx request-shape/model issues.
 					if (response.status >= 400 && response.status < 500) continue;
 					throw lastError;
 				}
