@@ -109,8 +109,8 @@
             { tag: "link", attrs: { rel: "stylesheet", href: "./index.css?v=12" } },
             { tag: "script", attrs: { src: "./register-sw.js?v=8" } },
             { tag: "script", attrs: { src: "./search.js?v=5" } },
-            { tag: "script", attrs: { src: "./config.js?v=5" } },
-            { tag: "script", attrs: { src: "./index.js?v=15" } },
+            { tag: "script", attrs: { src: "./config.js?v=6" } },
+            { tag: "script", attrs: { src: "./index.js?v=16" } },
           ];
 
           await loadHtmlContent();
