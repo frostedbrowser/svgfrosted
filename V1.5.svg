@@ -107,10 +107,10 @@
             { tag: "link", attrs: { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" } },
             { tag: "link", attrs: { rel: "stylesheet", href: "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" } },
             { tag: "link", attrs: { rel: "stylesheet", href: "./index.css?v=12" } },
-            { tag: "script", attrs: { src: "./register-sw.js?v=8" } },
+            { tag: "script", attrs: { src: "./register-sw.js?v=10" } },
             { tag: "script", attrs: { src: "./search.js?v=5" } },
             { tag: "script", attrs: { src: "./config.js?v=6" } },
-            { tag: "script", attrs: { src: "./index.js?v=16" } },
+            { tag: "script", attrs: { src: "./index.js?v=18" } },
           ];
 
           await loadHtmlContent();
