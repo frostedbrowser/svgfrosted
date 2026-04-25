@@ -165,6 +165,22 @@ function getDefaultScramjetCodecConfig() {
 	};
 }
 
+function normalizeCodecSource(value) {
+	if (typeof value === "function") {
+		try {
+			return value.toString();
+		} catch {
+			return "";
+		}
+	}
+	if (typeof value === "string") return value;
+	return "";
+}
+
+function hasSafeCodecSource(value, expectedToken) {
+	return normalizeCodecSource(value).toLowerCase().includes(expectedToken);
+}
+
 function normalizeScramjetCodecValue(value, fallback) {
 	if (typeof value === "function") {
 		return value.toString();
@@ -232,7 +248,7 @@ function getPersistableScramjetConfig(config) {
 function normalizeScramjetConfig(config) {
 	const defaults = getDefaultScramjetConfig();
 	const candidate = config && typeof config === "object" ? config : {};
-	return {
+	const normalized = {
 		...defaults,
 		...candidate,
 		globals: { ...defaults.globals, ...(candidate.globals || {}) },
@@ -244,10 +260,21 @@ function normalizeScramjetConfig(config) {
 			decode: normalizeScramjetCodecValue(candidate.codec?.decode, defaults.codec.decode),
 		},
 	};
+	if (!hasSafeScramjetCodec(normalized)) {
+		normalized.codec = { ...defaults.codec };
+	}
+	return normalized;
 }
 
 function hasValidScramjetCodec(config) {
 	return Boolean(config?.codec?.encode && config?.codec?.decode);
+}
+
+function hasSafeScramjetCodec(config) {
+	return (
+		hasSafeCodecSource(config?.codec?.encode, "encodeuricomponent") &&
+		hasSafeCodecSource(config?.codec?.decode, "decodeuricomponent")
+	);
 }
 
 function isUvRequest(requestUrl) {
@@ -284,10 +311,17 @@ function getScramjetDecodedTarget(requestUrl) {
 		if (!parsed.pathname.startsWith(prefix)) return "";
 		const encoded = parsed.pathname.slice(prefix.length);
 		if (!encoded) return "";
-		return decodeURIComponent(encoded);
+		const decoded = decodeURIComponent(encoded);
+		return normalizeLikelyMalformedTargetUrl(decoded);
 	} catch {
 		return "";
 	}
+}
+
+function normalizeLikelyMalformedTargetUrl(value) {
+	const target = String(value || "").trim();
+	if (!target) return "";
+	return target.replace(/^((?:https?|wss?)):\/(?!\/)/i, "$1://");
 }
 
 function buildUvProxyUrl(targetUrl) {
@@ -466,7 +500,8 @@ async function repairPersistedScramjetConfig() {
 		!storedConfig ||
 		!storedConfig.prefix ||
 		!storedConfig.files ||
-		!hasValidScramjetCodec(storedConfig)
+		!hasValidScramjetCodec(storedConfig) ||
+		!hasSafeScramjetCodec(storedConfig)
 	) {
 		await persistScramjetConfig(getPersistableScramjetConfig(normalizedConfig));
 	}
@@ -494,7 +529,7 @@ async function loadScramjetConfigWithRecovery() {
 			if (!resetWorked) throw error;
 			await persistScramjetConfig(getPersistableScramjetConfig(getDefaultScramjetConfig()));
 			await scramjet.loadConfig();
-		} else if (hasValidScramjetCodec(repairedConfig)) {
+		} else if (hasValidScramjetCodec(repairedConfig) && hasSafeScramjetCodec(repairedConfig)) {
 			console.warn("[frosted-sw] recovered malformed scramjet config from IndexedDB.");
 			scramjet.config = repairedConfig;
 		} else {

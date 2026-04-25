@@ -9040,7 +9040,7 @@ function fromScramjetProxyUrl(rawUrl) {
 		}
 		var encoded = parsed.pathname.slice(marker.length);
 		if (!encoded) return "";
-		return decodeURIComponent(encoded);
+		return decodeURIComponent(encoded).replace(/^((?:https?|wss?)):\/(?!\/)/i, "$1://");
 	} catch {
 		return target;
 	}
