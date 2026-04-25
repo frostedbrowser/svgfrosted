@@ -9759,6 +9759,19 @@ function normalizeWispUrl(rawUrl) {
 	}
 }
 
+function isLikelyStaticHostForWisp(hostname) {
+	var host = String(hostname || "").trim().toLowerCase();
+	if (!host) return false;
+	return (
+		host.endsWith(".jsdelivr.net") ||
+		host.endsWith(".github.io") ||
+		host.endsWith(".githubusercontent.com") ||
+		host.endsWith(".pages.dev") ||
+		host.endsWith(".netlify.app") ||
+		host.endsWith(".vercel.app")
+	);
+}
+
 function getWispTransportCandidates() {
 	var configuredPrimary = normalizeWispUrl(window?._CONFIG?.WISP_URL || window?.WISP_URL);
 	var isLocalDevHost = (() => {
@@ -9772,8 +9785,11 @@ function getWispTransportCandidates() {
 			return "";
 		}
 	})();
+	var currentHost = String(window.location.hostname || "").trim().toLowerCase();
+	var currentHostLikelyStatic = isLikelyStaticHostForWisp(currentHost);
 	var shouldTrySameOrigin =
-		!isLocalDevHost || (configuredHost && configuredHost === String(window.location.host || "").trim());
+		(!isLocalDevHost || (configuredHost && configuredHost === String(window.location.host || "").trim())) &&
+		!currentHostLikelyStatic;
 	var sameOrigin = shouldTrySameOrigin
 		? normalizeWispUrl(
 			`${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/wisp/`
@@ -9796,12 +9812,10 @@ async function getReachableWispCandidates(candidates) {
 			ordered.map((candidate) => probeWispEndpoint(candidate, 1200).catch(() => false))
 		);
 		var reachable = ordered.filter((candidate, index) => checks[index]);
-		if (reachable.length) {
-			return reachable.concat(ordered.filter((candidate) => !reachable.includes(candidate)));
-		}
+		return reachable;
 	} catch {
 	}
-	return ordered;
+	return [];
 }
 
 function getTransportLoaders() {
@@ -9858,7 +9872,8 @@ async function ensureTransport() {
 	await initializeProxyRuntime();
 	var candidates = getWispTransportCandidates();
 	var transportLoaders = getTransportLoaders();
-	var activeCandidates = await getReachableWispCandidates(candidates);
+	var reachableCandidates = await getReachableWispCandidates(candidates);
+	var activeCandidates = reachableCandidates.length ? reachableCandidates : candidates;
 	var lastError = null;
 
 	for (var transportLoader of transportLoaders) {
@@ -12382,3 +12397,4 @@ setTimeout(hideInitialLoadingPopup, 1200);
 
 
 // gooncoded :heartbroken:
+
