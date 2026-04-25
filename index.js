@@ -513,10 +513,17 @@ async function initializeProxyRuntime() {
 
 const GAMES_JSON = [
   {
-    "id": -1,
+    "id": -2,
     "name": "[!] Geometry Dash Web",
     "cover": "https://imgs.search.brave.com/2vQlQla6TCjtxPzhoTTfp8drWJm3losCZZgmKcUW5xU/rs:fit:500:0:1:0/g:ce/aHR0cHM6Ly9zaGFy/ZWQuZmFzdGx5LnN0/ZWFtc3RhdGljLmNv/bS9zdG9yZV9pdGVt/X2Fzc2V0cy9zdGVh/bS9hcHBzLzMyMjE3/MC9oZWFkZXIuanBn/P3Q9MTc3NTMwMDQw/MA",
-    "url": "https://gdwebmod.pages.dev/"
+    "url": "https://web-dashers.github.io/"
+  },
+  {
+    "id": -1,
+    "name": "[!] GTA Vice City",
+    "cover": "https://imgs.search.brave.com/BPt4zd6OfTqEGsuulq7fthfvMjTnZTB_bzPQZ9tOLIE/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly91cGxv/YWQud2lraW1lZGlh/Lm9yZy93aWtpcGVk/aWEvY29tbW9ucy90/aHVtYi8wLzBhL0dy/YW5kX1RoZWZ0X0F1/dG9fVmljZV9DaXR5/X2xvZ28uc3ZnLzI1/MHB4LUdyYW5kX1Ro/ZWZ0X0F1dG9fVmlj/ZV9DaXR5X2xvZ28u/c3ZnLnBuZw",
+    "url": "https://mrdavidzs.github.io/assets/vicecity/vicecity.html",
+    "author": "gn-math"
   },
   {
     "id": 0,
@@ -7573,6 +7580,7 @@ async function init() {
 	updateAdblockToggleLabel();
 	void ensureGhosteryEngine();
 	loadInstalledExtensionWallpapers();
+	bindServiceWorkerProxyFallbackListener();
 
 	if (randomTagline) {
 		randomTagline.textContent = taglines[Math.floor(Math.random() * taglines.length)];
@@ -7580,20 +7588,38 @@ async function init() {
 
 	populateWallpaperOptions();
 	loadWallpaper();
-	initParticles();
+	scheduleParticlesInit();
 	loadPanicSettings();
 	loadOpenModeSettings();
 	loadCloakSettings();
 	applyCloakVisualState(document.hidden || !document.hasFocus());
 	runStartupBrandSequence();
 	loadAiMode();
-	await initializeProxyRuntime();
 	createTab("");
 	loadProxySettings();
 	bindEvents();
 	renderHistory();
 	void loadGamesCatalog();
 	void loadWallpaperStoreCatalog();
+	scheduleTransportWarmup();
+}
+
+var serviceWorkerProxyFallbackBound = false;
+function bindServiceWorkerProxyFallbackListener() {
+	if (serviceWorkerProxyFallbackBound) return;
+	serviceWorkerProxyFallbackBound = true;
+	if (!("serviceWorker" in navigator)) return;
+	navigator.serviceWorker.addEventListener("message", (event) => {
+		var data = event?.data || {};
+		if (String(data.type || "") !== "frosted:proxy-fallback") return;
+		if (String(data.proxy || "") !== "ultraviolet") return;
+		if (getProxyMode() !== "ultraviolet") {
+			setProxyMode("ultraviolet");
+		}
+		if (proxyStatus) {
+			proxyStatus.textContent = "Proxy mode auto-switched to Ultraviolet after Scramjet error.";
+		}
+	});
 }
 
 var startupBrandTitle = "IXL | Math, Language Arts, Science, Social Studies, and Spanish";
@@ -7614,6 +7640,10 @@ var wallpapersInternalUrl = "frosted://wallpapers";
 var aiModeKey = "fb_ai_mode";
 
 function bindEvents() {
+	var actionHomeBtn = qs("#actionHomeBtn");
+	var actionSettingsBtn = qs("#actionSettingsBtn");
+	var actionNewTabBtn = qs("#actionNewTabBtn");
+
 	newTabBtn.addEventListener("click", () => createTab(""));
 	toolbarForm.addEventListener("submit", (e) => {
 		e.preventDefault();
@@ -7625,30 +7655,15 @@ function bindEvents() {
 		});
 	}
 	if (actionMenuBtn && actionMenu) {
-		var closeActionMenu = () => {
-			actionMenu.classList.remove("open");
-			actionMenuBtn.setAttribute("aria-expanded", "false");
-		};
-		var toggleActionMenu = () => {
-			var open = actionMenu.classList.toggle("open");
-			actionMenuBtn.setAttribute("aria-expanded", open ? "true" : "false");
-		};
-		actionMenuBtn.addEventListener("click", (event) => {
-			event.preventDefault();
-			event.stopPropagation();
-			toggleActionMenu();
-		});
-		actionMenu.addEventListener("click", () => {
-			closeActionMenu();
-		});
-		document.addEventListener("click", (event) => {
-			if (!actionMenu.classList.contains("open")) return;
-			if (actionMenu.contains(event.target) || actionMenuBtn.contains(event.target)) return;
-			closeActionMenu();
-		});
-		window.addEventListener("keydown", (event) => {
-			if (event.key === "Escape") closeActionMenu();
-		});
+		if (actionMenu.parentElement !== document.body) {
+			document.body.appendChild(actionMenu);
+		}
+		actionMenu.classList.add("open", "menu-pinned");
+		actionMenu.classList.remove("is-closed");
+		actionMenuBtn.setAttribute("aria-expanded", "true");
+		actionMenuBtn.setAttribute("aria-hidden", "true");
+		actionMenuBtn.tabIndex = -1;
+		actionMenuBtn.style.display = "none";
 	}
 	bindQuickContextMenu();
 	homeForm.addEventListener("submit", (e) => {
@@ -7656,10 +7671,22 @@ function bindEvents() {
 		navigateFromInput(homeSearchInput.value);
 	});
 
+	if (actionHomeBtn) {
+		actionHomeBtn.addEventListener("click", goHome);
+	}
+	if (actionSettingsBtn) {
+		actionSettingsBtn.addEventListener("click", () => navigateFromInput(settingsInternalUrl));
+	}
+	if (actionNewTabBtn) {
+		actionNewTabBtn.addEventListener("click", () => createTab(""));
+	}
+
 	backBtn.addEventListener("click", goBack);
 	forwardBtn.addEventListener("click", goForward);
 	reloadBtn.addEventListener("click", reloadActive);
-	homeBtn.addEventListener("click", goHome);
+	if (homeBtn) {
+		homeBtn.addEventListener("click", goHome);
+	}
 
 	gamesBtn.addEventListener("click", () => navigateFromInput(gamesInternalUrl));
 	if (wallpaperAppBtn) {
@@ -7676,7 +7703,9 @@ function bindEvents() {
 	if (adsToggleBtn) {
 		adsToggleBtn.addEventListener("click", toggleAdblock);
 	}
-	settingsBtn.addEventListener("click", () => navigateFromInput(settingsInternalUrl));
+	if (settingsBtn) {
+		settingsBtn.addEventListener("click", () => navigateFromInput(settingsInternalUrl));
+	}
 	if (creditsLink) {
 		creditsLink.addEventListener("click", (event) => {
 			event.preventDefault();
@@ -8258,6 +8287,14 @@ function renderTabs() {
 	if (tabsRowEl) {
 		tabsRowEl.style.setProperty("--tab-count-for-width", String(widthTabCount));
 	}
+	updateErudaButtonVisibility();
+}
+
+function updateErudaButtonVisibility() {
+	if (!erudaBtn) return;
+	var shouldShow = hasActiveProxiedTab();
+	erudaBtn.classList.toggle("is-hidden", !shouldShow);
+	erudaBtn.setAttribute("aria-hidden", shouldShow ? "false" : "true");
 }
 
 function getTabFaviconCandidates(url) {
@@ -8439,8 +8476,14 @@ function setAdblockEnabled(enabled) {
 function updateAdblockToggleLabel() {
 	if (!adsToggleBtn) return;
 	var enabled = isAdblockEnabled();
-	adsToggleBtn.textContent = enabled ? "ads: off" : "ads: on";
+	adsToggleBtn.innerHTML = enabled
+		? '<i class="fa-solid fa-bullhorn-slash"></i>'
+		: '<i class="fa-solid fa-bullhorn"></i>';
 	adsToggleBtn.setAttribute("aria-pressed", enabled ? "true" : "false");
+	adsToggleBtn.setAttribute(
+		"aria-label",
+		enabled ? "Ad blocker enabled. Click to disable." : "Ad blocker disabled. Click to enable."
+	);
 	adsToggleBtn.title = enabled
 		? "Ad blocker is enabled (ads are off)"
 		: "Ad blocker is disabled (ads are on)";
@@ -8564,6 +8607,19 @@ function shouldBlockAdRequest(rawUrl, baseHref, requestType = "other", sourceUrl
 	} catch {
 		return false;
 	}
+}
+
+function isScramjetTransportCrash(error) {
+	var message = String(error?.message || error || "").toLowerCase();
+	var stack = String(error?.stack || "").toLowerCase();
+	var detail = `${message}\n${stack}`;
+	return (
+		detail.includes("muxtaskended") ||
+		detail.includes("wisp") ||
+		detail.includes("hyper client") ||
+		detail.includes("n.p_ is not a function") ||
+		detail.includes("scramjet fetch failed")
+	);
 }
 
 function toScramjetProxyUrl(rawUrl) {
@@ -8719,7 +8775,7 @@ function injectAdblockIntoFrame(frameElement) {
 	}
 }
 
-async function loadUrl(url, pushHistory = true) {
+async function loadUrl(url, pushHistory = true, allowProxyFallback = true) {
 	resetError();
 	var tab = getActiveTab();
 	if (!tab) return;
@@ -8813,6 +8869,20 @@ async function loadUrl(url, pushHistory = true) {
 		}
 		addHistory(url);
 	} catch (err) {
+		if (
+			allowProxyFallback &&
+			getProxyMode() === "scramjet" &&
+			isScramjetTransportCrash(err)
+		) {
+			console.warn(
+				"[frosted] scramjet transport failed; auto-fallback to ultraviolet for this navigation.",
+				err
+			);
+			setProxyMode("ultraviolet");
+			setLoadingBannerMessage("ultraviolet");
+			await loadUrl(url, false, false);
+			return;
+		}
 		showError("Failed to initialize proxy runtime.", err);
 		showLoading(false);
 	} finally {
@@ -9027,11 +9097,23 @@ function shouldInjectAdblockForTab(tabId) {
 	return true;
 }
 
+function animateViewIn(element) {
+	if (!element) return;
+	element.classList.remove("view-anim-enter");
+	void element.offsetWidth;
+	element.classList.add("view-anim-enter");
+	setTimeout(() => {
+		element.classList.remove("view-anim-enter");
+	}, 520);
+}
+
 function showFrameForTab(tabId) {
 	hideBlank();
 	hideInternalPages();
 	tabFrames.forEach((item, id) => {
-		item.element.style.display = id === tabId ? "block" : "none";
+		var isActive = id === tabId;
+		item.element.style.display = isActive ? "block" : "none";
+		if (isActive) animateViewIn(item.element);
 	});
 }
 
@@ -9073,6 +9155,7 @@ function showBlank() {
 	showLoading(false);
 	hideInternalPages();
 	blankState.style.display = "flex";
+	animateViewIn(blankState);
 	tabFrames.forEach((item) => {
 		item.element.style.display = "none";
 	});
@@ -9096,7 +9179,10 @@ function showSettingsPage() {
 	if (aiPage) aiPage.classList.remove("active");
 	if (extensionPage) extensionPage.classList.remove("active");
 	if (extensionStorePage) extensionStorePage.classList.remove("active");
-	if (settingsPage) settingsPage.classList.add("active");
+	if (settingsPage) {
+		settingsPage.classList.add("active");
+		animateViewIn(settingsPage);
+	}
 	addressInput.value = settingsInternalUrl;
 	setParticlesVisible(isMatrixThemeActive());
 }
@@ -9113,7 +9199,10 @@ function showPartnersPage() {
 	if (aiPage) aiPage.classList.remove("active");
 	if (extensionPage) extensionPage.classList.remove("active");
 	if (extensionStorePage) extensionStorePage.classList.remove("active");
-	if (partnersPage) partnersPage.classList.add("active");
+	if (partnersPage) {
+		partnersPage.classList.add("active");
+		animateViewIn(partnersPage);
+	}
 	addressInput.value = partnersInternalUrl;
 	setParticlesVisible(isMatrixThemeActive());
 }
@@ -9127,7 +9216,10 @@ function showGamesPage() {
 	if (settingsPage) settingsPage.classList.remove("active");
 	if (creditsPage) creditsPage.classList.remove("active");
 	if (partnersPage) partnersPage.classList.remove("active");
-	if (gamesPage) gamesPage.classList.add("active");
+	if (gamesPage) {
+		gamesPage.classList.add("active");
+		animateViewIn(gamesPage);
+	}
 	if (aiPage) aiPage.classList.remove("active");
 	if (extensionPage) extensionPage.classList.remove("active");
 	if (extensionStorePage) extensionStorePage.classList.remove("active");
@@ -9145,7 +9237,10 @@ function showAiPage() {
 	if (creditsPage) creditsPage.classList.remove("active");
 	if (partnersPage) partnersPage.classList.remove("active");
 	if (gamesPage) gamesPage.classList.remove("active");
-	if (aiPage) aiPage.classList.add("active");
+	if (aiPage) {
+		aiPage.classList.add("active");
+		animateViewIn(aiPage);
+	}
 	if (extensionPage) extensionPage.classList.remove("active");
 	if (extensionStorePage) extensionStorePage.classList.remove("active");
 	addressInput.value = aiInternalUrl;
@@ -9164,7 +9259,10 @@ function showExtensionStorePage() {
 	if (gamesPage) gamesPage.classList.remove("active");
 	if (aiPage) aiPage.classList.remove("active");
 	if (extensionPage) extensionPage.classList.remove("active");
-	if (extensionStorePage) extensionStorePage.classList.add("active");
+	if (extensionStorePage) {
+		extensionStorePage.classList.add("active");
+		animateViewIn(extensionStorePage);
+	}
 	addressInput.value = wallpapersInternalUrl;
 	renderWallpaperStoreGrid();
 	setParticlesVisible(isMatrixThemeActive());
@@ -9182,7 +9280,10 @@ function showCreditsPage() {
 	if (aiPage) aiPage.classList.remove("active");
 	if (extensionPage) extensionPage.classList.remove("active");
 	if (extensionStorePage) extensionStorePage.classList.remove("active");
-	if (creditsPage) creditsPage.classList.add("active");
+	if (creditsPage) {
+		creditsPage.classList.add("active");
+		animateViewIn(creditsPage);
+	}
 	addressInput.value = creditsInternalUrl;
 	setParticlesVisible(isMatrixThemeActive());
 }
@@ -9256,7 +9357,7 @@ function getTransportLoaders() {
 	];
 }
 
-function probeWispEndpoint(wispUrl, timeoutMs = 3500) {
+function probeWispEndpoint(wispUrl, timeoutMs = 1200) {
 	return new Promise((resolve) => {
 		var target = String(wispUrl || "").trim();
 		if (!target) {
@@ -9295,17 +9396,12 @@ async function ensureTransport() {
 	await initializeProxyRuntime();
 	var candidates = getWispTransportCandidates();
 	var transportLoaders = getTransportLoaders();
-	var probeCache = new Map();
+	var activeCandidates = candidates;
 	var lastError = null;
 
 	for (var transportLoader of transportLoaders) {
-		for (var wispUrl of candidates) {
+		for (var wispUrl of activeCandidates) {
 			try {
-				var isReachable = probeCache.has(wispUrl)
-					? probeCache.get(wispUrl)
-					: await probeWispEndpoint(wispUrl);
-				if (!probeCache.has(wispUrl)) probeCache.set(wispUrl, isReachable);
-				if (!isReachable) continue;
 				try {
 					await connection.setTransport(transportLoader.modulePath, transportLoader.argsForWisp(wispUrl));
 				} catch (error) {
@@ -9323,9 +9419,35 @@ async function ensureTransport() {
 	throw lastError || new Error("Unable to establish proxy transport.");
 }
 
-setTimeout(() => {
-	ensureTransport().catch(() => {});
-}, 0);
+var transportWarmupScheduled = false;
+function scheduleTransportWarmup() {
+	if (transportWarmupScheduled) return;
+	if (getProxyMode() !== "scramjet") return;
+	transportWarmupScheduled = true;
+	runWhenIdle(() => {
+		ensureTransport().catch(() => {});
+	}, 1800);
+}
+
+var particlesInitScheduled = false;
+function scheduleParticlesInit() {
+	if (particlesInitScheduled) return;
+	particlesInitScheduled = true;
+	requestAnimationFrame(() => {
+		requestAnimationFrame(() => {
+			initParticles();
+		});
+	});
+}
+
+function runWhenIdle(task, timeoutMs = 1000) {
+	if (typeof window.requestIdleCallback === "function") {
+		window.requestIdleCallback(task, { timeout: timeoutMs });
+		return;
+	}
+	setTimeout(task, Math.max(0, timeoutMs));
+}
+
 var historyKey = "fb_history";
 
 function addHistory(url) {

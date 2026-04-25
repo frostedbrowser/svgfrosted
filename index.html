@@ -44,10 +44,10 @@
 		<link rel="modulepreload" href="./baremux/index.mjs?v=5" />
 		<link rel="modulepreload" href="./libcurl/index.mjs?v=5" />
 		<link rel="modulepreload" href="./epoxy/index.mjs?v=5" />
-		<script src="./scram/scramjet.all.js?v=5"></script>
+		<script src="./scram/scramjet.all.js?v=6" defer></script>
 		<script type="module">import "./baremux/index.js?v=5";</script>
 		<link rel="stylesheet" href="./index.css?v=5" />
-		<script src="./register-sw.js?v=5" defer></script>
+		<script src="./register-sw.js?v=6" defer></script>
 		<script src="./search.js?v=5" defer></script>
 		<script src="./config.js?v=5" defer></script>
 		<script src="./index.js?v=5" defer></script>
@@ -77,9 +77,6 @@
 							</button>
 						</form>
 						<div class="toolbar-actions">
-							<button class="toolbar-btn" id="homeBtn" aria-label="Home">
-								<i class="fa-solid fa-house"></i>
-							</button>
 							<div class="action-menu-wrap">
 								<button
 									class="toolbar-btn action-menu-btn"
@@ -92,34 +89,35 @@
 									<i class="fa-solid fa-bars"></i>
 								</button>
 								<div class="action-menu" id="actionMenu" role="menu" aria-label="Quick actions">
-									<button class="action-menu-item" id="gamesBtn" type="button" role="menuitem">
-										<i class="fa-solid fa-gamepad"></i> Games
+									<button class="action-menu-item" id="actionHomeBtn" type="button" role="menuitem" aria-label="Home" title="Home">
+										<i class="fa-solid fa-house"></i>
 									</button>
-									<button class="action-menu-item" id="wallpaperAppBtn" type="button" role="menuitem">
-										<i class="fa-solid fa-image"></i> Open Wallpapers
+									<button class="action-menu-item action-menu-item-code" id="erudaBtn" type="button" role="menuitem" aria-label="Open eruda console" title="Open eruda console">
+										&lt;/&gt;
 									</button>
-									<button class="action-menu-item" id="aiBtn" type="button" role="menuitem">
-										<img src="./chatgpt-logo.svg" alt="" class="toolbar-btn-logo" /> AI
+									<button class="action-menu-item" id="gamesBtn" type="button" role="menuitem" aria-label="Games" title="Games">
+										<i class="fa-solid fa-gamepad"></i>
 									</button>
-									<button class="action-menu-item eruda-btn" id="erudaBtn" type="button" role="menuitem">
-										&lt;/&gt; eruda
+									<button class="action-menu-item" id="aiBtn" type="button" role="menuitem" aria-label="AI" title="AI">
+										<i class="fa-solid fa-globe"></i>
 									</button>
-									<button class="action-menu-item ads-toggle-btn" id="adsToggleBtn" type="button" role="menuitem">
-										ads: off
+									<button class="action-menu-item" id="actionSettingsBtn" type="button" role="menuitem" aria-label="Settings" title="Settings">
+										<i class="fa-solid fa-gear"></i>
 									</button>
-									<button class="action-menu-item" id="partnershipBtn" type="button" role="menuitem">
-										<img
-											id="partnershipBtnImg"
-											src="https://raw.githubusercontent.com/mrdavidzs/assets/refs/heads/main/icons/download.png"
-											alt=""
-										/>
-										Partners
+									<button class="action-menu-item" id="wallpaperAppBtn" type="button" role="menuitem" aria-label="Wallpapers" title="Wallpapers">
+										<i class="fa-solid fa-image"></i>
+									</button>
+									<button class="action-menu-item" id="adsToggleBtn" type="button" role="menuitem" aria-label="Toggle ad blocker" title="Toggle ad blocker">
+										<i class="fa-solid fa-bullhorn-slash"></i>
+									</button>
+									<button class="action-menu-item" id="partnershipBtn" type="button" role="menuitem" aria-label="Partners" title="Partners">
+										<i class="fa-solid fa-handshake"></i>
+									</button>
+									<button class="action-menu-item" id="actionNewTabBtn" type="button" role="menuitem" aria-label="New tab" title="New tab">
+										<i class="fa-solid fa-plus"></i>
 									</button>
 								</div>
 							</div>
-							<button class="toolbar-btn" id="settingsBtn" aria-label="Settings">
-								<i class="fa-solid fa-gear"></i>
-							</button>
 						</div>
 					</div>
 					<div class="tabs-row">

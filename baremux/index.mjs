@@ -2,7 +2,7 @@ const e = 20,
   t = globalThis.fetch,
   r = globalThis.SharedWorker,
   a = globalThis.localStorage,
-  s = globalThis.navigator.serviceWorker,
+  s = globalThis.navigator?.serviceWorker,
   o = MessagePort.prototype.postMessage,
   n = {
     prototype: { send: WebSocket.prototype.send },
@@ -50,6 +50,7 @@ function l(e, t) {
   const a = new r(e, 'bare-mux-worker');
   return (
     t &&
+      s &&
       s.addEventListener('message', (t) => {
         if ('getPort' === t.data.type && t.data.port) {
           console.debug('bare-mux: recieved request for port from sw');

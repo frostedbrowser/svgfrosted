@@ -1,9 +1,16 @@
 [
   {
-    "id": -1,
+    "id": -2,
     "name": "[!] Geometry Dash Web",
     "cover": "https://imgs.search.brave.com/2vQlQla6TCjtxPzhoTTfp8drWJm3losCZZgmKcUW5xU/rs:fit:500:0:1:0/g:ce/aHR0cHM6Ly9zaGFy/ZWQuZmFzdGx5LnN0/ZWFtc3RhdGljLmNv/bS9zdG9yZV9pdGVt/X2Fzc2V0cy9zdGVh/bS9hcHBzLzMyMjE3/MC9oZWFkZXIuanBn/P3Q9MTc3NTMwMDQw/MA",
-    "url": "https://gdwebmod.pages.dev/"
+    "url": "https://web-dashers.github.io/"
+  },
+  {
+    "id": -1,
+    "name": "[!] GTA Vice City",
+    "cover": "https://imgs.search.brave.com/BPt4zd6OfTqEGsuulq7fthfvMjTnZTB_bzPQZ9tOLIE/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly91cGxv/YWQud2lraW1lZGlh/Lm9yZy93aWtpcGVk/aWEvY29tbW9ucy90/aHVtYi8wLzBhL0dy/YW5kX1RoZWZ0X0F1/dG9fVmljZV9DaXR5/X2xvZ28uc3ZnLzI1/MHB4LUdyYW5kX1Ro/ZWZ0X0F1dG9fVmlj/ZV9DaXR5X2xvZ28u/c3ZnLnBuZw",
+    "url": "https://mrdavidzs.github.io/assets/vicecity/vicecity.html",
+    "author": "gn-math"
   },
   {
     "id": 0,

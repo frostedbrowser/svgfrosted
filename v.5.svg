@@ -76,12 +76,17 @@
             const node = createHeadNode(nodeDef);
             head.appendChild(node);
             if (nodeDef.tag === "script") {
+              const isInlineScript = !nodeDef.attrs?.src;
+              if (isInlineScript) {
+                await Promise.resolve();
+                return;
+              }
               try {
                 await new Promise((resolve) => {
                   const timeout = setTimeout(() => {
                     console.warn(`Timeout loading script: ${nodeDef.attrs?.src || "[inline script]"}`);
                     resolve();
-                  }, 12000);
+                  }, 4000);
                   node.addEventListener("load", () => { clearTimeout(timeout); resolve(); }, { once: true });
                   node.addEventListener("error", () => { clearTimeout(timeout); console.error(`Failed to load script: ${nodeDef.attrs?.src || "[inline script]"}`); resolve(); }, { once: true });
                 });
@@ -95,24 +100,24 @@
             { tag: "meta", attrs: { charset: "UTF-8" } },
             { tag: "meta", attrs: { name: "viewport", content: "width=device-width, initial-scale=1.0" } },
             { tag: "meta", attrs: { name: "theme-color", content: "#0a0f14" } },
-            { tag: "link", attrs: { rel: "modulepreload", href: "./baremux/index.mjs?v=4" } },
-            { tag: "link", attrs: { rel: "modulepreload", href: "./libcurl/index.mjs?v=4" } },
-            { tag: "link", attrs: { rel: "modulepreload", href: "./epoxy/index.mjs?v=4" } },
+            { tag: "link", attrs: { rel: "modulepreload", href: "./baremux/index.mjs?v=7" } },
+            { tag: "link", attrs: { rel: "modulepreload", href: "./libcurl/index.mjs?v=7" } },
+            { tag: "link", attrs: { rel: "modulepreload", href: "./epoxy/index.mjs?v=7" } },
             { tag: "link", attrs: { rel: "preconnect", href: "https://fonts.googleapis.com" } },
             { tag: "link", attrs: { rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: "" } },
             { tag: "link", attrs: { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" } },
             { tag: "link", attrs: { rel: "stylesheet", href: "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" } },
-            { tag: "link", attrs: { rel: "stylesheet", href: "./index.css?v=4" } },
-            { tag: "script", attrs: { type: "module", src: "./scram/scramjet.all.js?v=4" } },
+            { tag: "link", attrs: { rel: "stylesheet", href: "./index.css?v=7" } },
+            { tag: "script", attrs: { type: "module", src: "./scram/scramjet.all.js?v=6" } },
             {
               tag: "script",
               attrs: { type: "module" },
-              text: 'import * as BareMuxModule from "./baremux/index.mjs?v=4"; globalThis.BareMux = BareMuxModule;'
+              text: 'import * as BareMuxModule from "./baremux/index.mjs?v=7"; globalThis.BareMux = BareMuxModule;'
             },
-            { tag: "script", attrs: { type: "module", src: "./register-sw.js?v=4" } },
-            { tag: "script", attrs: { type: "module", src: "./search.js?v=4" } },
-            { tag: "script", attrs: { type: "module", src: "./config.js?v=4" } },
-            { tag: "script", attrs: { type: "module", src: "./index.js?v=4" } },
+            { tag: "script", attrs: { type: "module", src: "./register-sw.js?v=7" } },
+            { tag: "script", attrs: { type: "module", src: "./search.js?v=7" } },
+            { tag: "script", attrs: { type: "module", src: "./config.js?v=7" } },
+            { tag: "script", attrs: { type: "module", src: "./index.js?v=7" } },
           ];
 
           await loadHtmlContent();

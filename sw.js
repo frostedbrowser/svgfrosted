@@ -13,6 +13,7 @@ if (!self.UVServiceWorker) {
 const { ScramjetServiceWorker } = $scramjetLoadWorker();
 const uvServiceWorker = new UVServiceWorker();
 let scramjet = null;
+let scramjetCircuitOpen = false;
 const scramjetReadyPromise = initializeScramjetServiceWorker();
 
 const hardBlockedAdKeywords = [
@@ -202,6 +203,62 @@ function isScramjetWasmRequest(requestUrl) {
 	}
 }
 
+function getScramjetDecodedTarget(requestUrl) {
+	try {
+		const parsed = new URL(requestUrl);
+		const prefix = getScramjetPrefixPath();
+		if (!parsed.pathname.startsWith(prefix)) return "";
+		const encoded = parsed.pathname.slice(prefix.length);
+		if (!encoded) return "";
+		return decodeURIComponent(encoded);
+	} catch {
+		return "";
+	}
+}
+
+function buildUvProxyUrl(targetUrl) {
+	try {
+		if (!targetUrl || !self.__uv$config?.prefix || !self.__uv$config?.encodeUrl) return "";
+		return `${self.location.origin}${self.__uv$config.prefix}${self.__uv$config.encodeUrl(targetUrl)}`;
+	} catch {
+		return "";
+	}
+}
+
+async function notifyClientsOfScramjetFailure(reason) {
+	try {
+		const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+		for (const client of clients) {
+			client.postMessage({
+				type: "frosted:proxy-fallback",
+				proxy: "ultraviolet",
+				reason: String(reason || "scramjet_failed"),
+			});
+		}
+	} catch {}
+}
+
+function isFatalScramjetTransportError(error) {
+	const message = String(error?.message || error || "").toLowerCase();
+	const stack = String(error?.stack || "").toLowerCase();
+	const detail = `${message}\n${stack}`;
+	return (
+		detail.includes("there are no bare clients") ||
+		detail.includes("no baretransport was set") ||
+		detail.includes("failed to get a ping response") ||
+		detail.includes("messageport") ||
+		detail.includes("muxtaskended") ||
+		detail.includes("n.p_ is not a function")
+	);
+}
+
+function buildScramjetUvFallbackResponse(requestUrl) {
+	const target = getScramjetDecodedTarget(requestUrl);
+	const uvUrl = buildUvProxyUrl(target);
+	if (!uvUrl) return null;
+	return Response.redirect(uvUrl, 302);
+}
+
 function isMissingObjectStoreError(error) {
 	return (
 		error?.name === "NotFoundError" &&
@@ -307,6 +364,7 @@ async function initializeScramjetServiceWorker() {
 		await loadScramjetConfigWithRecovery();
 	} catch (error) {
 		console.warn("[frosted-sw] initial scramjet config load failed:", error);
+		void notifyClientsOfScramjetFailure("scramjet_config_load_failed");
 	}
 	return scramjet;
 }
@@ -328,6 +386,10 @@ async function handleRequest(event) {
 	}
 
 	if (isScramjetRequest(event.request.url) || isScramjetWasmRequest(event.request.url)) {
+		if (scramjetCircuitOpen) {
+			const fallback = buildScramjetUvFallbackResponse(event.request.url);
+			if (fallback) return fallback;
+		}
 		try {
 			await scramjetReadyPromise;
 			await loadScramjetConfigWithRecovery();
@@ -336,6 +398,12 @@ async function handleRequest(event) {
 			}
 		} catch (error) {
 			console.error("[frosted-sw] scramjet fetch failed:", error);
+			if (isFatalScramjetTransportError(error)) {
+				scramjetCircuitOpen = true;
+			}
+			void notifyClientsOfScramjetFailure("scramjet_fetch_failed");
+			const fallback = buildScramjetUvFallbackResponse(event.request.url);
+			if (fallback) return fallback;
 			return new Response("Scramjet failed to load this page.", {
 				status: 502,
 				statusText: "Scramjet Error",
