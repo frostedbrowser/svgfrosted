@@ -100,6 +100,7 @@
             { tag: "meta", attrs: { charset: "UTF-8" } },
             { tag: "meta", attrs: { name: "viewport", content: "width=device-width, initial-scale=1.0" } },
             { tag: "meta", attrs: { name: "theme-color", content: "#0a0f14" } },
+            { tag: "link", attrs: { rel: "modulepreload", href: "./baremux/index.mjs?v=7" } },
             { tag: "link", attrs: { rel: "modulepreload", href: "./libcurl/index.mjs?v=7" } },
             { tag: "link", attrs: { rel: "modulepreload", href: "./epoxy/index.mjs?v=7" } },
             { tag: "link", attrs: { rel: "preconnect", href: "https://fonts.googleapis.com" } },
@@ -107,10 +108,16 @@
             { tag: "link", attrs: { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" } },
             { tag: "link", attrs: { rel: "stylesheet", href: "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" } },
             { tag: "link", attrs: { rel: "stylesheet", href: "./index.css?v=12" } },
-            { tag: "script", attrs: { src: "./register-sw.js?v=10" } },
-            { tag: "script", attrs: { src: "./search.js?v=5" } },
-            { tag: "script", attrs: { src: "./config.js?v=6" } },
-            { tag: "script", attrs: { src: "./index.js?v=21" } },
+            { tag: "script", attrs: { type: "module", src: "./scram/scramjet.all.js?v=6" } },
+            {
+              tag: "script",
+              attrs: { type: "module" },
+              text: 'import * as BareMuxModule from "./baremux/index.mjs?v=7"; globalThis.BareMux = BareMuxModule;'
+            },
+            { tag: "script", attrs: { type: "module", src: "./register-sw.js?v=10" } },
+            { tag: "script", attrs: { type: "module", src: "./search.js?v=5" } },
+            { tag: "script", attrs: { type: "module", src: "./config.js?v=6" } },
+            { tag: "script", attrs: { type: "module", src: "./index.js?v=21" } },
           ];
 
           await loadHtmlContent();
