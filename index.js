@@ -9412,6 +9412,30 @@ async function loadUrl(url, pushHistory = true, allowProxyFallback = true) {
 	if (!tab) return;
 	url = await decodeAppProxyUrlIfNeeded(url);
 	url = normalizeLikelyMalformedTargetUrl(url);
+	if (isSettingsInternalUrl(url)) {
+		showSettingsPage();
+		return;
+	}
+	if (isPartnersInternalUrl(url)) {
+		showPartnersPage();
+		return;
+	}
+	if (isGamesInternalUrl(url)) {
+		showGamesPage();
+		return;
+	}
+	if (isAiInternalUrl(url)) {
+		showAiPage();
+		return;
+	}
+	if (isExtensionInternalUrl(url) || isExtensionStoreInternalUrl(url)) {
+		showExtensionStorePage();
+		return;
+	}
+	if (isCreditsInternalUrl(url)) {
+		showCreditsPage();
+		return;
+	}
 	if (isSameAppOriginUrl(url)) {
 		showBlank();
 		showError(
@@ -9441,31 +9465,6 @@ async function loadUrl(url, pushHistory = true, allowProxyFallback = true) {
 	homeSearchInput.value = url;
 	renderTabs();
 	updateNavButtons();
-
-	if (isSettingsInternalUrl(url)) {
-		showSettingsPage();
-		return;
-	}
-	if (isPartnersInternalUrl(url)) {
-		showPartnersPage();
-		return;
-	}
-	if (isGamesInternalUrl(url)) {
-		showGamesPage();
-		return;
-	}
-	if (isAiInternalUrl(url)) {
-		showAiPage();
-		return;
-	}
-	if (isExtensionInternalUrl(url) || isExtensionStoreInternalUrl(url)) {
-		showExtensionStorePage();
-		return;
-	}
-	if (isCreditsInternalUrl(url)) {
-		showCreditsPage();
-		return;
-	}
 
 	if (!canUseProxyRuntimeOnThisOrigin()) {
 		var directUrl = String(url || "").trim();
@@ -10613,6 +10612,14 @@ function normalizeInternalScheme(value) {
 
 function getInternalRoute(value) {
 	var normalized = normalizeInternalScheme(value).toLowerCase();
+	if (!normalized.startsWith("frosted://")) {
+		try {
+			var decoded = decodeURIComponent(normalized);
+			var marker = decoded.indexOf("frosted://");
+			if (marker >= 0) normalized = decoded.slice(marker);
+		} catch {
+		}
+	}
 	if (!normalized.startsWith("frosted://")) return normalized;
 	var withoutHash = normalized.split("#")[0];
 	var withoutQuery = withoutHash.split("?")[0];
