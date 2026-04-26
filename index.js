@@ -8777,7 +8777,9 @@ function isSameAppOriginUrl(rawUrl) {
 		) {
 			return false;
 		}
-		return true;
+		// Only block same-origin URLs that are inside Frosted's own app path.
+		// Same-origin external content (e.g. other jsDelivr GH paths) should be loadable.
+		return path.startsWith(appBasePath);
 	} catch {
 		return false;
 	}
