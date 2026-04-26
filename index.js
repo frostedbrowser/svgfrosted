@@ -676,6 +676,18 @@ function waitForServiceWorkerController(timeoutMs = 9000) {
 	});
 }
 
+function hasMatchingActiveServiceWorkerController() {
+	try {
+		var controller = navigator.serviceWorker?.controller;
+		if (!controller?.scriptURL) return false;
+		var controllerUrl = new URL(controller.scriptURL, window.location.href);
+		var expectedSwUrl = new URL(`${appBasePath}sw.js`, window.location.origin);
+		return controllerUrl.origin === expectedSwUrl.origin && controllerUrl.pathname === expectedSwUrl.pathname;
+	} catch {
+		return false;
+	}
+}
+
 function maybeReloadForServiceWorkerControl() {
 	try {
 		if (typeof window === "undefined" || !window.location || !window.sessionStorage) return false;
@@ -693,7 +705,7 @@ async function ensureServiceWorkerRuntimeReady() {
 	if (serviceWorkerReadyPromise) return serviceWorkerReadyPromise;
 	serviceWorkerReadyPromise = (async () => {
 		await registerSW();
-		if (navigator.serviceWorker?.controller) {
+		if (hasMatchingActiveServiceWorkerController()) {
 			try {
 				window.sessionStorage?.removeItem(swControlReloadMarkerKey);
 			} catch {
@@ -701,7 +713,7 @@ async function ensureServiceWorkerRuntimeReady() {
 			return true;
 		}
 		await waitForServiceWorkerController(9000);
-		var hasController = Boolean(navigator.serviceWorker?.controller);
+		var hasController = hasMatchingActiveServiceWorkerController();
 		if (hasController) {
 			try {
 				window.sessionStorage?.removeItem(swControlReloadMarkerKey);
@@ -765,6 +777,10 @@ async function initializeProxyRuntime() {
 		var createScramjet = () =>
 			new ScramjetController({
 				prefix: scramjetPrefix,
+				codec: {
+					encode: (value) => (value ? encodeURIComponent(String(value)) : value),
+					decode: (value) => (value ? decodeURIComponent(String(value)) : value),
+				},
 				files: {
 					wasm: withRuntimeAssetVersion(`${appBasePath}scram/scramjet.wasm.wasm`),
 					all: withRuntimeAssetVersion(`${appBasePath}scram/scramjet.all.js`),
@@ -9392,6 +9408,7 @@ async function loadUrl(url, pushHistory = true, allowProxyFallback = true) {
 	var tab = getActiveTab();
 	if (!tab) return;
 	url = await decodeAppProxyUrlIfNeeded(url);
+	url = normalizeLikelyMalformedTargetUrl(url);
 	if (isSameAppOriginUrl(url)) {
 		showBlank();
 		showError(
@@ -9565,8 +9582,9 @@ function ensureTabFrame(tabId) {
 					if (!window.__uv$config?.encodeUrl) {
 						throw new Error("Ultraviolet runtime is not ready.");
 					}
+					var normalizedUrl = normalizeLikelyMalformedTargetUrl(url);
 					var prefix = window.__uv$config?.prefix || uvPrefix;
-					created.frame.src = window.location.origin + prefix + window.__uv$config.encodeUrl(url);
+					created.frame.src = window.location.origin + prefix + window.__uv$config.encodeUrl(normalizedUrl);
 				},
 			}
 			: scramjet.createFrame();
