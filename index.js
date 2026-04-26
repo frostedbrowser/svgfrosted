@@ -855,9 +855,6 @@ async function initializeProxyRuntime() {
 			await scramjet.init();
 		} catch (error) {
 			if (!isMissingObjectStoreError(error) && !isDbConnectionClosedError(error)) throw error;
-			// Do not force-delete $scramjet on startup. If SW/runtime already has a
-			// live connection, deletion can block and make refreshes extremely slow.
-			// Keep the controller alive and let SW-side recovery handle persistence.
 		}
 		if (!scramjetLoadStatusLogged) {
 			scramjetLoadStatusLogged = true;
