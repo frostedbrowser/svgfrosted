@@ -7860,14 +7860,14 @@ function applyfrosteddBarConfig(config = frosteddBarConfig) {
 async function init() {
 	applyfrosteddBarConfig();
 	prefetchProxyAssets();
-	await warmProxyRuntimeAtStartup();
-	await applyPrivacyDefaults();
-	await ensureMobileSafeProxyMode();
+	void warmProxyRuntimeAtStartup();
+	applyPrivacyDefaults();
+	void ensureMobileSafeProxyMode();
 	updateAdblockToggleLabel();
 	void ensureGhosteryEngine();
 	loadInstalledExtensionWallpapers();
-	await restoreSavedWallpaperFromStoreCatalog();
-	await ensureFirstVisitMp4Wallpaper();
+	void restoreSavedWallpaperFromStoreCatalog().catch(() => {});
+	void ensureFirstVisitMp4Wallpaper().catch(() => {});
 	bindServiceWorkerProxyFallbackListener();
 
 	if (randomTagline) {
@@ -10314,10 +10314,9 @@ async function clearScramjetSessionData() {
 	}
 }
 
-async function applyPrivacyDefaults() {
+function applyPrivacyDefaults() {
 	clearLegacyPersistentHistory();
 	sessionHistoryItems = [];
-	await clearScramjetSessionData();
 }
 
 function renderGames() {
