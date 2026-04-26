@@ -1,8 +1,10 @@
 ﻿﻿console.log(`${getFrostedPrefix()}: loaded index.js`)
 
+var defaultProxyMode = "scramjet";
+
 function getProxyModeTag() {
 	try {
-		var raw = String(localStorage.getItem("fb_proxy_mode") || "scramjet").trim().toLowerCase();
+		var raw = String(localStorage.getItem("fb_proxy_mode") || defaultProxyMode).trim().toLowerCase();
 		return raw === "ultraviolet" ? "uv" : "sj";
 	} catch {
 		return "sj";
@@ -289,7 +291,7 @@ function normalizeProxyMode(value) {
 	var normalized = String(value || "").trim().toLowerCase();
 	if (normalized === "ultraviolet" || normalized === "uv") return "ultraviolet";
 	if (normalized === "scramjet" || normalized === "sj") return "scramjet";
-	return "scramjet";
+	return defaultProxyMode;
 }
 
 function isSvgShellRuntime() {
@@ -303,7 +305,7 @@ function isSvgShellRuntime() {
 }
 
 function getProxyMode() {
-	return normalizeProxyMode(localStorage.getItem(proxyModeStorage) || "scramjet");
+	return normalizeProxyMode(localStorage.getItem(proxyModeStorage) || defaultProxyMode);
 }
 
 function canUseProxyRuntimeOnThisOrigin() {
@@ -468,7 +470,44 @@ function resolveAppBasePath() {
 	return path.replace(/\/{2,}/g, "/");
 }
 
+function resolveAppAssetBaseUrl() {
+	try {
+		var scriptCandidates = [];
+		try {
+			if (document.currentScript?.src) scriptCandidates.push(String(document.currentScript.src));
+		} catch {}
+		try {
+			qsa("script[src]").forEach((script) => {
+				if (script?.src) scriptCandidates.push(String(script.src));
+			});
+		} catch {}
+		for (var candidate of scriptCandidates) {
+			try {
+				var parsed = new URL(candidate, window.location.href);
+				var pathname = String(parsed.pathname || "/");
+				if (!pathname.endsWith("/index.js") && !pathname.endsWith("/register-sw.js")) continue;
+				var fromScript = pathname.replace(/\/[^/]*$/, "/");
+				return new URL(fromScript, `${parsed.origin}/`).href;
+			} catch {}
+		}
+	} catch {}
+	try {
+		return new URL(appBasePath, window.location.origin).href;
+	} catch {
+		return window.location.href;
+	}
+}
+
+function toAppAssetUrl(path) {
+	try {
+		return new URL(String(path || ""), appAssetBaseUrl).href;
+	} catch {
+		return String(path || "");
+	}
+}
+
 var appBasePath = resolveAppBasePath();
+var appAssetBaseUrl = resolveAppAssetBaseUrl();
 
 var scramjetPrefix = (() => {
 	return `${appBasePath}scramjet/`.replace(/\/{2,}/g, "/");
@@ -481,7 +520,7 @@ var uvPrefix = (() => {
 function hintAssetOnce(rel, href, asType, crossOrigin = false) {
 	try {
 		if (!rel || !href || !document?.head) return;
-		var absoluteHref = new URL(href, window.location.href).href;
+		var absoluteHref = toAppAssetUrl(href);
 		var existing = Array.from(document.head.querySelectorAll(`link[rel='${rel}']`)).find(
 			(link) => link.href === absoluteHref
 		);
@@ -540,7 +579,7 @@ var gamesCatalog = [];
 
 async function ensureBareMuxGlobal() {
 	if (globalThis.BareMux?.BareMuxConnection) return globalThis.BareMux;
-	await import(`${appBasePath}baremux/index.js?v=5`);
+	await import(toAppAssetUrl(`${appBasePath}baremux/index.js?v=5`));
 	if (!globalThis.BareMux?.BareMuxConnection) {
 		throw new Error("BareMux failed to load.");
 	}
@@ -586,7 +625,7 @@ function deleteIndexedDb(databaseName) {
 
 function loadScriptOnce(src) {
 	return new Promise((resolve, reject) => {
-		var absoluteSrc = new URL(src, window.location.href).href;
+		var absoluteSrc = toAppAssetUrl(src);
 		var existing = Array.from(document.scripts || []).find((script) => script.src === absoluteSrc);
 		if (existing) {
 			if (existing.dataset.fbLoaded === "true") {
@@ -598,7 +637,7 @@ function loadScriptOnce(src) {
 			return;
 		}
 		var script = document.createElement("script");
-		script.src = src;
+		script.src = absoluteSrc;
 		script.async = false;
 		script.addEventListener(
 			"load",
