@@ -139,6 +139,9 @@ function isHardAllowedAdRequest(request) {
 		const rawUrl = String(request?.url || "").trim();
 		if (!rawUrl) return false;
 		const parsed = new URL(rawUrl);
+		// Never bypass same-origin requests (including /uv/service and /scramjet routes),
+		// otherwise proxy navigations can fall through to CDN static 404s.
+		if (parsed.origin === self.location.origin) return false;
 		const href = parsed.href.toLowerCase();
 		return hardAllowedAdUrlPatterns.some((pattern) => pattern.test(href));
 	} catch {}
