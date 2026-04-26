@@ -497,11 +497,13 @@ function hintAssetOnce(rel, href, asType, crossOrigin = false) {
 }
 
 function prefetchProxyAssets() {
-	hintAssetOnce("prefetch", withRuntimeAssetVersion(`${appBasePath}scram/scramjet.all.js`), "script");
-	hintAssetOnce("prefetch", withRuntimeAssetVersion(`${appBasePath}scram/scramjet.sync.js`), "script");
-	hintAssetOnce("prefetch", withRuntimeAssetVersion(`${appBasePath}scram/scramjet.wasm.wasm`), "fetch", true);
-	hintAssetOnce("prefetch", withRuntimeAssetVersion(`${appBasePath}uv/uv.bundle.js`), "script");
-	hintAssetOnce("prefetch", withRuntimeAssetVersion(`${appBasePath}uv/uv.config.js`), "script");
+	hintAssetOnce("preload", withRuntimeAssetVersion(`${appBasePath}scram/scramjet.all.js`), "script");
+	hintAssetOnce("preload", withRuntimeAssetVersion(`${appBasePath}scram/scramjet.sync.js`), "script");
+	hintAssetOnce("preload", withRuntimeAssetVersion(`${appBasePath}scram/scramjet.wasm.wasm`), "fetch", true);
+	hintAssetOnce("modulepreload", withRuntimeAssetVersion(`${appBasePath}uv/uv.bundle.js`), "script");
+	hintAssetOnce("modulepreload", withRuntimeAssetVersion(`${appBasePath}uv/uv.config.js`), "script");
+	hintAssetOnce("modulepreload", `${appBasePath}epoxy/index.mjs`, "script");
+	hintAssetOnce("modulepreload", `${appBasePath}libcurl/index.mjs`, "script");
 }
 var scramjet = null;
 var connection = null;
@@ -10170,7 +10172,7 @@ function scheduleTransportWarmup() {
 	if (!canUseProxyRuntimeOnThisOrigin()) return;
 	if (getProxyMode() !== "scramjet") return;
 	transportWarmupScheduled = true;
-	runWhenIdle(() => {
+	setTimeout(() => {
 		ensureTransport().catch((error) => {
 			if (getProxyMode() !== "scramjet") return;
 			if (!isScramjetTransportCrash(error)) return;
@@ -10179,7 +10181,7 @@ function scheduleTransportWarmup() {
 				proxyStatus.textContent = "Scramjet warmup failed. Try Ultraviolet if browsing fails.";
 			}
 		});
-	}, 1800);
+	}, 120);
 }
 
 var particlesInitScheduled = false;
