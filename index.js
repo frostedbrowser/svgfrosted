@@ -9408,7 +9408,7 @@ function injectAdblockIntoFrame(frameElement) {
 	}
 }
 
-async function loadUrl(url, pushHistory = true, allowProxyFallback = true) {
+async function loadUrl(url, pushHistory = true, allowProxyFallback = true, allowSameOriginNavigation = false) {
 	resetError();
 	var tab = getActiveTab();
 	if (!tab) return;
@@ -9438,7 +9438,7 @@ async function loadUrl(url, pushHistory = true, allowProxyFallback = true) {
 		showCreditsPage();
 		return;
 	}
-	if (isSameAppOriginUrl(url)) {
+	if (isSameAppOriginUrl(url) && !allowSameOriginNavigation) {
 		showBlank();
 		showError(
 			"Cannot proxy this address.",
@@ -10691,7 +10691,7 @@ async function openGameFromCatalog(url, options = {}) {
 	if (finalUrl.startsWith("blob:")) {
 		gameBlobUrlsByTab.set(tab.id, finalUrl);
 	}
-	await loadUrl(finalUrl, true);
+	await loadUrl(finalUrl, true, true, true);
 }
 
 function isCatalogGameUrl(url) {
