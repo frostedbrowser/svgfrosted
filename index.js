@@ -7783,6 +7783,7 @@ function applyfrosteddBarConfig(config = frosteddBarConfig) {
 async function init() {
 	applyfrosteddBarConfig();
 	prefetchProxyAssets();
+	await warmProxyRuntimeAtStartup();
 	await applyPrivacyDefaults();
 	await ensureMobileSafeProxyMode();
 	updateAdblockToggleLabel();
@@ -9999,6 +10000,23 @@ function scheduleProxyRuntimePreload() {
 			});
 		}
 	}, 900);
+}
+
+async function warmProxyRuntimeAtStartup() {
+	if (!canUseProxyRuntimeOnThisOrigin()) return;
+	try {
+		var hasController = await ensureServiceWorkerRuntimeReady();
+		if (!hasController && proxyStatus) {
+			proxyStatus.textContent = "Service worker not controlling yet. Reload once if proxy fails.";
+		}
+	} catch (error) {
+		console.warn("[frosted] service worker warmup failed during startup.", error);
+	}
+
+	await Promise.allSettled([
+		ensureUvRuntime(),
+		loadScriptOnce(withRuntimeAssetVersion(`${appBasePath}scram/scramjet.all.js`)),
+	]);
 }
 
 var transportWarmupScheduled = false;
