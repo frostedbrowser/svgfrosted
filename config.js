@@ -1,5 +1,5 @@
 const defaultConfig = {
-	WISP_URL: "wss://fern.best/wisp/",
+	WISP_URL: "wss://stellite.games/wisp/",
 };
 
 if (typeof window !== "undefined") {

@@ -332,6 +332,24 @@ function normalizeLikelyMalformedTargetUrl(value) {
 	return target.replace(/^((?:https?|wss?)):\/(?!\/)/i, "$1://");
 }
 
+function getCanonicalScramjetProxyUrl(requestUrl) {
+	try {
+		const parsed = new URL(requestUrl);
+		const prefix = getScramjetPrefixPath();
+		if (!parsed.pathname.startsWith(prefix)) return "";
+		const encoded = parsed.pathname.slice(prefix.length);
+		if (!encoded) return "";
+		const decoded = decodeURIComponent(encoded);
+		const normalized = normalizeLikelyMalformedTargetUrl(decoded);
+		if (!normalized) return "";
+		const canonicalEncoded = encodeURIComponent(normalized);
+		if (encoded === canonicalEncoded) return "";
+		return `${parsed.origin}${prefix}${canonicalEncoded}${parsed.search}`;
+	} catch {
+		return "";
+	}
+}
+
 function buildUvProxyUrl(targetUrl) {
 	try {
 		if (!targetUrl || !self.__uv$config?.prefix || !self.__uv$config?.encodeUrl) return "";
@@ -599,6 +617,11 @@ async function handleRequest(event) {
 	}
 
 	if (isScramjetRequest(event.request.url) || isScramjetWasmRequest(event.request.url)) {
+		const canonicalScramjetUrl =
+			event.request.method === "GET" ? getCanonicalScramjetProxyUrl(event.request.url) : "";
+		if (canonicalScramjetUrl) {
+			return Response.redirect(canonicalScramjetUrl, 302);
+		}
 		if (scramjetCircuitOpen) {
 			const fallback = buildScramjetUvFallbackResponse(event.request.url);
 			if (fallback) return fallback;
