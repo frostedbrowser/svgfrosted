@@ -427,7 +427,9 @@ function deleteIndexedDb(databaseName) {
 }
 
 function validateScramjetDb(db) {
-	const requiredStores = ["config", "cookies", "redirectTrackers", "referrerPolicies", "publicSuffixList"];
+	// Keep validation strict enough for runtime boot but tolerant of Scramjet schema
+	// changes across versions (optional stores may vary).
+	const requiredStores = ["config", "cookies"];
 	return requiredStores.every((storeName) => db.objectStoreNames.contains(storeName));
 }
 

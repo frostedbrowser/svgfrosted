@@ -498,8 +498,8 @@ function hintAssetOnce(rel, href, asType, crossOrigin = false) {
 
 function prefetchProxyAssets() {
 	hintAssetOnce("preload", withRuntimeAssetVersion(`${appBasePath}scram/scramjet.all.js`), "script");
-	hintAssetOnce("preload", withRuntimeAssetVersion(`${appBasePath}scram/scramjet.sync.js`), "script");
-	hintAssetOnce("preload", withRuntimeAssetVersion(`${appBasePath}scram/scramjet.wasm.wasm`), "fetch", true);
+	hintAssetOnce("prefetch", withRuntimeAssetVersion(`${appBasePath}scram/scramjet.sync.js`), "script");
+	hintAssetOnce("prefetch", withRuntimeAssetVersion(`${appBasePath}scram/scramjet.wasm.wasm`), "fetch", true);
 	hintAssetOnce("modulepreload", withRuntimeAssetVersion(`${appBasePath}uv/uv.bundle.js`), "script");
 	hintAssetOnce("modulepreload", withRuntimeAssetVersion(`${appBasePath}uv/uv.config.js`), "script");
 	hintAssetOnce("modulepreload", `${appBasePath}epoxy/index.mjs`, "script");
