@@ -282,7 +282,7 @@ var { errorPanel, errorTitle, errorDetails } = errorRefs;
 
 var { proxySelect, proxyStatus } = proxyRefs;
 var proxyModeStorage = "fb_proxy_mode";
-var defaultWispUrl = "wss://stellite.games/wisp/";
+var defaultWispUrl = "wss://fern.best/wisp/";
 
 function normalizeProxyMode(value) {
 	var normalized = String(value || "").trim().toLowerCase();
@@ -9795,7 +9795,7 @@ function isLikelyStaticHostForWisp(hostname) {
 }
 
 function getWispTransportCandidates() {
-	var forced = normalizeWispUrl("wss://stellite.games/wisp/");
+	var forced = normalizeWispUrl("wss://fern.best/wisp/");
 	return forced ? [forced] : [defaultWispUrl];
 }
 
