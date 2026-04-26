@@ -482,6 +482,7 @@ var runtimeInitPromise = null;
 var scramjetInitPromise = null;
 var uvRuntimePromise = null;
 var serviceWorkerReadyPromise = null;
+var swControlReloadMarkerKey = "__frosted_sw_control_reload_once_v1";
 var proxyRuntimePreloadScheduled = false;
 var tabs = [];
 var activeTabId = null;
@@ -648,14 +649,39 @@ function waitForServiceWorkerController(timeoutMs = 9000) {
 	});
 }
 
+function maybeReloadForServiceWorkerControl() {
+	try {
+		if (typeof window === "undefined" || !window.location || !window.sessionStorage) return false;
+		if (window.sessionStorage.getItem(swControlReloadMarkerKey)) return false;
+		window.sessionStorage.setItem(swControlReloadMarkerKey, String(Date.now()));
+		window.location.reload();
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 async function ensureServiceWorkerRuntimeReady() {
 	if (!canUseProxyRuntimeOnThisOrigin()) return false;
 	if (serviceWorkerReadyPromise) return serviceWorkerReadyPromise;
 	serviceWorkerReadyPromise = (async () => {
 		await registerSW();
-		if (navigator.serviceWorker?.controller) return true;
+		if (navigator.serviceWorker?.controller) {
+			try {
+				window.sessionStorage?.removeItem(swControlReloadMarkerKey);
+			} catch {
+			}
+			return true;
+		}
 		await waitForServiceWorkerController(9000);
-		return Boolean(navigator.serviceWorker?.controller);
+		var hasController = Boolean(navigator.serviceWorker?.controller);
+		if (hasController) {
+			try {
+				window.sessionStorage?.removeItem(swControlReloadMarkerKey);
+			} catch {
+			}
+		}
+		return hasController;
 	})().catch((error) => {
 		serviceWorkerReadyPromise = null;
 		throw error;
@@ -675,7 +701,10 @@ async function initializeProxyRuntime() {
 			connection = createBareMuxConnection(bareMuxModule);
 			var hasController = await ensureServiceWorkerRuntimeReady();
 			if (!hasController) {
-				throw new Error("Service worker is installed but not controlling this page yet.");
+				if (maybeReloadForServiceWorkerControl()) {
+					throw new Error("Service worker is activating; reloading page once to gain control.");
+				}
+				throw new Error("Service worker is installed but not controlling this page yet. Reload once and retry.");
 			}
 			return { connection };
 		})().catch((error) => {
@@ -9097,6 +9126,8 @@ function isScramjetTransportCrash(error) {
 	var stack = String(error?.stack || "").toLowerCase();
 	var detail = `${message}\n${stack}`;
 	return (
+		detail.includes("service worker is installed but not controlling this page yet") ||
+		detail.includes("service worker is activating; reloading page once to gain control") ||
 		detail.includes("muxtaskended") ||
 		detail.includes("wisp") ||
 		detail.includes("hyper client") ||
