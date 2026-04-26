@@ -781,6 +781,9 @@ async function initializeProxyRuntime() {
 					encode: (value) => (value ? encodeURIComponent(String(value)) : value),
 					decode: (value) => (value ? decodeURIComponent(String(value)) : value),
 				},
+				flags: {
+					strictRewrites: false,
+				},
 				files: {
 					wasm: withRuntimeAssetVersion(`${appBasePath}scram/scramjet.wasm.wasm`),
 					all: withRuntimeAssetVersion(`${appBasePath}scram/scramjet.all.js`),

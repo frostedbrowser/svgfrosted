@@ -228,7 +228,7 @@ function getDefaultScramjetConfig() {
 		flags: {
 			serviceworkers: false,
 			syncxhr: false,
-			strictRewrites: true,
+			strictRewrites: false,
 			rewriterLogs: false,
 			captureErrors: true,
 			cleanErrors: false,
@@ -566,6 +566,8 @@ async function loadScramjetConfigWithRecovery() {
 		}
 	}
 	scramjet.config = normalizeScramjetConfig(scramjet.config || repairedConfig);
+	// Reduce false-positive rewrite failures on javascript: URLs in some sites.
+	scramjet.config.flags = { ...(scramjet.config.flags || {}), strictRewrites: false };
 	if (!scramjet.config?.prefix) {
 		scramjet.config = getDefaultScramjetConfig();
 	}
