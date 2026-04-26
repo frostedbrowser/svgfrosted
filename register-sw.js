@@ -1,5 +1,5 @@
 "use strict";
-const stockSW = "./sw.js?v=13";
+const stockSW = "sw.js?v=13";
 const swReadyTimeoutMs = 10000;
 const swControllerTimeoutMs = 8000;
 
@@ -40,6 +40,28 @@ function withTimeout(promise, timeoutMs, fallbackValue = null) {
 
 function getAppBasePath() {
 	try {
+		var scriptCandidates = [];
+		try {
+			if (document.currentScript?.src) scriptCandidates.push(String(document.currentScript.src));
+		} catch {}
+		try {
+			var registerScript = document.querySelector("script[src*='register-sw.js']");
+			if (registerScript?.src) scriptCandidates.push(String(registerScript.src));
+		} catch {}
+		try {
+			var indexScript = document.querySelector("script[src*='index.js']");
+			if (indexScript?.src) scriptCandidates.push(String(indexScript.src));
+		} catch {}
+		for (var candidate of scriptCandidates) {
+			try {
+				var parsed = new URL(candidate, window.location.href);
+				var pathname = String(parsed.pathname || "/");
+				if (!pathname.endsWith("register-sw.js") && !pathname.endsWith("index.js")) continue;
+				var fromScript = pathname.replace(/\/[^/]*$/, "/");
+				if (!fromScript.startsWith("/")) fromScript = `/${fromScript}`;
+				return fromScript.replace(/\/{2,}/g, "/");
+			} catch {}
+		}
 		var path = String(window.location.pathname || "/").replace(/\/[^/]*$/, "/");
 		if (!path.startsWith("/")) path = `/${path}`;
 		return path.replace(/\/{2,}/g, "/");
@@ -87,7 +109,7 @@ async function registerSW() {
 		throw new Error("Your browser doesn't support service workers.");
 	}
 
-	const registration = await navigator.serviceWorker.register(stockSW);
+	const registration = await navigator.serviceWorker.register(`${getAppBasePath()}${stockSW}`);
 	if (registration.waiting) {
 		registration.waiting.postMessage({ type: "SKIP_WAITING" });
 	}

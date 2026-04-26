@@ -437,11 +437,38 @@ function setProxyMode(value) {
 	loadProxySettings();
 }
 
-var appBasePath = (() => {
+function resolveAppBasePath() {
+	try {
+		var scriptCandidates = [];
+		try {
+			if (document.currentScript?.src) scriptCandidates.push(String(document.currentScript.src));
+		} catch {
+		}
+		try {
+			qsa("script[src]").forEach((script) => {
+				if (script?.src) scriptCandidates.push(String(script.src));
+			});
+		} catch {
+		}
+		for (var candidate of scriptCandidates) {
+			try {
+				var parsed = new URL(candidate, window.location.href);
+				var pathname = String(parsed.pathname || "/");
+				if (!pathname.endsWith("/index.js") && !pathname.endsWith("/register-sw.js")) continue;
+				var fromScript = pathname.replace(/\/[^/]*$/, "/");
+				if (!fromScript.startsWith("/")) fromScript = `/${fromScript}`;
+				return fromScript.replace(/\/{2,}/g, "/");
+			} catch {
+			}
+		}
+	} catch {
+	}
 	var path = String(window.location.pathname || "/").replace(/\/[^/]*$/, "/");
 	if (!path.startsWith("/")) path = `/${path}`;
 	return path.replace(/\/{2,}/g, "/");
-})();
+}
+
+var appBasePath = resolveAppBasePath();
 
 var scramjetPrefix = (() => {
 	return `${appBasePath}scramjet/`.replace(/\/{2,}/g, "/");
@@ -9148,6 +9175,12 @@ function toScramjetProxyUrl(rawUrl) {
 	return `${base}${scramjetPrefix}${encodeURIComponent(target)}`;
 }
 
+function normalizeLikelyMalformedTargetUrl(value) {
+	var target = String(value || "").trim();
+	if (!target) return "";
+	return target.replace(/^((?:https?|wss?)):\/(?!\/)/i, "$1://");
+}
+
 function fromScramjetProxyUrl(rawUrl) {
 	var target = String(rawUrl || "").trim();
 	if (!target) return "";
@@ -9160,8 +9193,15 @@ function fromScramjetProxyUrl(rawUrl) {
 		}
 		var encoded = parsed.pathname.slice(marker.length);
 		if (!encoded) return "";
-		return decodeURIComponent(encoded).replace(/^((?:https?|wss?)):\/(?!\/)/i, "$1://");
+		return normalizeLikelyMalformedTargetUrl(decodeURIComponent(encoded));
 	} catch {
+		try {
+			var fallbackParsed = new URL(target, window.location.href);
+			if (fallbackParsed.pathname.startsWith(scramjetPrefix) || fallbackParsed.pathname.startsWith("/scramjet/")) {
+				return "";
+			}
+		} catch {
+		}
 		return target;
 	}
 }
@@ -9177,7 +9217,60 @@ function fromUltravioletProxyUrl(rawUrl) {
 		if (!encoded) return "";
 		return window.__uv$config.decodeUrl(encoded);
 	} catch {
+		try {
+			var fallbackParsed = new URL(target, window.location.href);
+			if (
+				fallbackParsed.pathname.startsWith(window.__uv$config?.prefix || uvPrefix) ||
+				fallbackParsed.pathname.startsWith("/uv/service/")
+			) {
+				return "";
+			}
+		} catch {
+		}
 		return target;
+	}
+}
+
+async function decodeAppProxyUrlIfNeeded(rawUrl) {
+	var input = String(rawUrl || "").trim();
+	if (!input) return input;
+	try {
+		var parsed = new URL(input, window.location.href);
+		if (parsed.origin !== window.location.origin) return input;
+
+		var scramjetMarker = parsed.pathname.startsWith(scramjetPrefix)
+			? scramjetPrefix
+			: parsed.pathname.startsWith("/scramjet/")
+				? "/scramjet/"
+				: "";
+		if (scramjetMarker) {
+			var scramEncoded = parsed.pathname.slice(scramjetMarker.length);
+			if (!scramEncoded) return input;
+			try {
+				return normalizeLikelyMalformedTargetUrl(decodeURIComponent(scramEncoded));
+			} catch {
+				return input;
+			}
+		}
+
+		var uvMarker = parsed.pathname.startsWith(uvPrefix)
+			? uvPrefix
+			: parsed.pathname.startsWith("/uv/service/")
+				? "/uv/service/"
+				: "";
+		if (!uvMarker) return input;
+		var uvEncoded = parsed.pathname.slice(uvMarker.length);
+		if (!uvEncoded) return input;
+		try {
+			await ensureUvRuntime();
+		} catch {
+		}
+		var decodeFn = window.__uv$config?.decodeUrl;
+		if (typeof decodeFn !== "function") return input;
+		var decodedUv = String(decodeFn(uvEncoded) || "").trim();
+		return decodedUv || input;
+	} catch {
+		return input;
 	}
 }
 
@@ -9298,6 +9391,7 @@ async function loadUrl(url, pushHistory = true, allowProxyFallback = true) {
 	resetError();
 	var tab = getActiveTab();
 	if (!tab) return;
+	url = await decodeAppProxyUrlIfNeeded(url);
 	if (isSameAppOriginUrl(url)) {
 		showBlank();
 		showError(
