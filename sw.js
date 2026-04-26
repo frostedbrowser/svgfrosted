@@ -12,7 +12,7 @@ if (!self.UVServiceWorker) {
 // trying to hard block the new adblock.turtlecute.org scripts (fakeads)
 const { ScramjetServiceWorker } = $scramjetLoadWorker();
 const uvServiceWorker = new UVServiceWorker();
-// Scramjet must attach its internal message handler during initial SW evaluation.
+// Scramjet requires its message handler to be attached during initial SW evaluation.
 let scramjet = new ScramjetServiceWorker();
 let scramjetCircuitOpen = false;
 let scramjetReadyPromise = Promise.resolve(null);
@@ -27,9 +27,6 @@ self.addEventListener("unhandledrejection", (event) => {
 	event.preventDefault();
 	if (scramjetUnhandledSchemaMismatchSeen) return;
 	scramjetUnhandledSchemaMismatchSeen = true;
-	console.warn(
-		"[frosted-sw] intercepted early scramjet IndexedDB schema mismatch; continuing with serialized startup recovery."
-	);
 });
 
 const hardBlockedAdKeywords = [
@@ -277,6 +274,15 @@ function normalizeScramjetConfig(config) {
 	return normalized;
 }
 
+function ensureScramjetRuntimeConfigReady(worker) {
+	const targetWorker = worker || ensureScramjetWorkerInstance();
+	targetWorker.config = normalizeScramjetConfig(targetWorker.config || getDefaultScramjetConfig());
+	if (!targetWorker.config?.prefix) {
+		targetWorker.config = getDefaultScramjetConfig();
+	}
+	return targetWorker;
+}
+
 function hasValidScramjetCodec(config) {
 	return Boolean(config?.codec?.encode && config?.codec?.decode);
 }
@@ -309,7 +315,12 @@ function isScramjetRequest(requestUrl) {
 function isScramjetWasmRequest(requestUrl) {
 	try {
 		var url = new URL(requestUrl);
-		return url.origin === location.origin && url.pathname === getDefaultScramjetConfig().files.wasm;
+		var wasmAsset = new URL(getDefaultScramjetConfig().files.wasm, self.location.origin);
+		return (
+			url.origin === wasmAsset.origin &&
+			url.pathname === wasmAsset.pathname &&
+			url.search === wasmAsset.search
+		);
 	} catch {
 		return false;
 	}
@@ -396,6 +407,54 @@ function buildScramjetUvFallbackResponse(requestUrl) {
 	return Response.redirect(uvUrl, 302);
 }
 
+function getUrlProtocol(value) {
+	try {
+		return String(new URL(String(value || "").trim(), self.location.href).protocol || "").toLowerCase();
+	} catch {
+		return "";
+	}
+}
+
+function isNonNetworkTargetUrl(targetUrl) {
+	const protocol = getUrlProtocol(targetUrl);
+	return protocol === "data:" || protocol === "blob:" || protocol === "about:" || protocol === "javascript:";
+}
+
+async function handleNonNetworkTargetRequest(targetUrl, requestMethod) {
+	const protocol = getUrlProtocol(targetUrl);
+	if (requestMethod !== "GET") {
+		return new Response("Unsupported method for non-network URL.", {
+			status: 405,
+			statusText: "Method Not Allowed",
+			headers: {
+				"content-type": "text/plain; charset=utf-8",
+				"cache-control": "no-store",
+			},
+		});
+	}
+	if (protocol === "data:" || protocol === "blob:") {
+		try {
+			return await fetch(targetUrl);
+		} catch {
+			return new Response("Failed to resolve non-network resource URL.", {
+				status: 502,
+				statusText: "Non-network Resource Error",
+				headers: {
+					"content-type": "text/plain; charset=utf-8",
+					"cache-control": "no-store",
+				},
+			});
+		}
+	}
+	// javascript:/about: are not safe/fetchable network resources.
+	return new Response("", {
+		status: 204,
+		headers: {
+			"cache-control": "no-store",
+		},
+	});
+}
+
 function isMissingObjectStoreError(error) {
 	return (
 		error?.name === "NotFoundError" &&
@@ -429,19 +488,32 @@ function deleteIndexedDb(databaseName) {
 function validateScramjetDb(db) {
 	// Keep validation strict enough for runtime boot but tolerant of Scramjet schema
 	// changes across versions (optional stores may vary).
-	const requiredStores = ["config", "cookies"];
+	const requiredStores = ["config"];
 	return requiredStores.every((storeName) => db.objectStoreNames.contains(storeName));
 }
 
+function ensureScramjetWorkerInstance() {
+	if (scramjet) return scramjet;
+	scramjet = new ScramjetServiceWorker();
+	return scramjet;
+}
+
 async function ensureScramjetDbReady() {
-	const db = await openScramjetDb();
+	let db;
+	try {
+		db = await openScramjetDb();
+	} catch (error) {
+		console.info("[frosted-sw] scramjet IndexedDB open skipped during startup warmup:", error);
+		return;
+	}
 	const isValid = validateScramjetDb(db);
 	try {
 		db.close();
 	} catch {}
 	if (isValid) return;
-	console.warn("[frosted-sw] scramjet IndexedDB schema mismatch detected before worker startup; recreating $scramjet database.");
-	await resetScramjetDbWithRetry();
+	// Do not force-delete the DB during startup. Scramjet may already hold a
+	// live connection from initial SW evaluation, which can keep delete blocked
+	// and create repeated refresh-time stalls.
 }
 
 async function resetScramjetDbWithRetry() {
@@ -540,48 +612,43 @@ async function repairPersistedScramjetConfig() {
 }
 
 async function loadScramjetConfigWithRecovery() {
-	let repairedConfig;
+	const worker = ensureScramjetWorkerInstance();
+	let repairedConfig = getDefaultScramjetConfig();
 	try {
 		repairedConfig = await repairPersistedScramjetConfig();
 	} catch (error) {
 		if (!isMissingObjectStoreError(error) && !isDbConnectionClosedError(error)) throw error;
-		console.warn("[frosted-sw] scramjet config store unavailable during repair; retrying with fresh database.");
-		const resetWorked = await resetScramjetDbWithRetry();
-		if (!resetWorked) throw error;
-		repairedConfig = getDefaultScramjetConfig();
-		await persistScramjetConfig(getPersistableScramjetConfig(repairedConfig));
 	}
 	try {
-		await scramjet.loadConfig();
+		await worker.loadConfig();
 	} catch (error) {
 		if (isMissingObjectStoreError(error) || isDbConnectionClosedError(error)) {
-			console.warn("[frosted-sw] scramjet IndexedDB/config unavailable; recreating $scramjet database.");
-			const resetWorked = await resetScramjetDbWithRetry();
-			if (!resetWorked) throw error;
-			await persistScramjetConfig(getPersistableScramjetConfig(getDefaultScramjetConfig()));
-			await scramjet.loadConfig();
+			worker.config = repairedConfig;
 		} else if (hasValidScramjetCodec(repairedConfig) && hasSafeScramjetCodec(repairedConfig)) {
 			console.warn("[frosted-sw] recovered malformed scramjet config from IndexedDB.");
-			scramjet.config = repairedConfig;
+			worker.config = repairedConfig;
 		} else {
 			throw error;
 		}
 	}
-	scramjet.config = normalizeScramjetConfig(scramjet.config || repairedConfig);
+	worker.config = normalizeScramjetConfig(worker.config || repairedConfig);
 	// Reduce false-positive rewrite failures on javascript: URLs in some sites.
-	scramjet.config.flags = { ...(scramjet.config.flags || {}), strictRewrites: false };
-	if (!scramjet.config?.prefix) {
-		scramjet.config = getDefaultScramjetConfig();
+	worker.config.flags = { ...(worker.config.flags || {}), strictRewrites: false };
+	if (!worker.config?.prefix) {
+		worker.config = getDefaultScramjetConfig();
 	}
 	try {
-		await persistScramjetConfig(getPersistableScramjetConfig(scramjet.config));
+		await persistScramjetConfig(getPersistableScramjetConfig(worker.config));
 	} catch (error) {
-		console.warn("[frosted-sw] failed to persist normalized scramjet config:", error);
+		if (!isMissingObjectStoreError(error) && !isDbConnectionClosedError(error)) {
+			console.warn("[frosted-sw] failed to persist normalized scramjet config:", error);
+		}
 	}
 }
 
 async function initializeScramjetServiceWorker() {
 	await ensureScramjetDbReady();
+	ensureScramjetWorkerInstance();
 	try {
 		await loadScramjetConfigWithRecovery();
 	} catch (error) {
@@ -623,11 +690,33 @@ async function handleRequest(event) {
 		return uvServiceWorker.fetch(event);
 	}
 
-	if (isScramjetRequest(event.request.url) || isScramjetWasmRequest(event.request.url)) {
+	const isWasmAssetRequest = isScramjetWasmRequest(event.request.url);
+	if (isScramjetRequest(event.request.url) || isWasmAssetRequest) {
+		// Scramjet runtime WASM should be fetched directly; routing it through
+		// scramjet.fetch can trigger URL parsing/rewrite errors on first load.
+		if (isWasmAssetRequest) {
+			try {
+				return await fetch(event.request);
+			} catch (error) {
+				console.warn("[frosted-sw] direct wasm fetch failed:", event.request.url, error);
+				return new Response("Failed to load Scramjet WASM asset.", {
+					status: 502,
+					statusText: "Scramjet WASM Fetch Error",
+					headers: {
+						"content-type": "text/plain; charset=utf-8",
+						"cache-control": "no-store",
+					},
+				});
+			}
+		}
 		const canonicalScramjetUrl =
 			event.request.method === "GET" ? getCanonicalScramjetProxyUrl(event.request.url) : "";
 		if (canonicalScramjetUrl) {
 			return Response.redirect(canonicalScramjetUrl, 302);
+		}
+		const decodedTarget = getScramjetDecodedTarget(event.request.url);
+		if (decodedTarget && isNonNetworkTargetUrl(decodedTarget)) {
+			return await handleNonNetworkTargetRequest(decodedTarget, event.request.method);
 		}
 		if (scramjetCircuitOpen) {
 			const fallback = buildScramjetUvFallbackResponse(event.request.url);
@@ -635,12 +724,36 @@ async function handleRequest(event) {
 		}
 		try {
 			await scramjetReadyPromise;
-			await loadScramjetConfigWithRecovery();
-			if (scramjet.route(event)) {
-				return await scramjet.fetch(event);
+			const worker = ensureScramjetRuntimeConfigReady(ensureScramjetWorkerInstance());
+			if (!worker.config?.prefix) {
+				await loadScramjetConfigWithRecovery();
+			}
+			if (!worker.config?.prefix) {
+				scramjetCircuitOpen = true;
+				const fallback = buildScramjetUvFallbackResponse(event.request.url);
+				if (fallback) return fallback;
+				return new Response("Scramjet config is unavailable.", {
+					status: 502,
+					statusText: "Scramjet Config Error",
+					headers: {
+						"content-type": "text/plain; charset=utf-8",
+						"cache-control": "no-store",
+					},
+				});
+			}
+			if (worker.route(event)) {
+				return await worker.fetch(event);
 			}
 		} catch (error) {
-			console.error("[frosted-sw] scramjet fetch failed:", error);
+			const detail = String(error?.message || error || "").toLowerCase();
+			if (detail.includes("prefix")) {
+				scramjetCircuitOpen = true;
+				const fallback = buildScramjetUvFallbackResponse(event.request.url);
+				if (fallback) return fallback;
+			}
+			if (!detail.includes("prefix")) {
+				console.error("[frosted-sw] scramjet fetch failed:", error);
+			}
 			if (isFatalScramjetTransportError(error)) {
 				scramjetCircuitOpen = true;
 			}
