@@ -10583,7 +10583,11 @@ function renderGames() {
 			var target = resolveGameUrl(game.url);
 			if (!target) return;
 			queueGameClickScriptForActiveTab(game.clickScript);
-			await openGameFromCatalog(target, { useBlob: game.useBlob });
+			await openGameFromCatalog(target, {
+				useBlob: game.useBlob,
+				special: game.special,
+				title: game.title,
+			});
 		});
 		gamesGrid.appendChild(card);
 	});
@@ -10600,6 +10604,9 @@ async function loadGamesCatalog() {
 				image: String(entry?.image || entry?.cover || "").trim(),
 				clickScript: String(entry?.clickScript || entry?.defaultClickScript || "").trim(),
 				useBlob: Boolean(entry?.useBlob),
+				special: Array.isArray(entry?.special)
+					? entry.special.map((item) => String(item || "").trim().toLowerCase()).filter(Boolean)
+					: [],
 			}))
 			.filter((entry) => entry.title && entry.url);
 	}
@@ -10882,9 +10889,20 @@ async function openGameFromCatalog(url, options = {}) {
 	restoredGameProgressMarkerByTab.delete(tab.id);
 	var finalUrl = String(url || "");
 	rawHtmlFallbackTriedUrlByTab.delete(tab.id);
+	var specialFlags = Array.isArray(options?.special)
+		? options.special.map((item) => String(item || "").trim().toLowerCase())
+		: [];
+	var gameTitle = String(options?.title || "").trim().toLowerCase();
+	var isFlashGame = specialFlags.includes("flash");
+	var isLikelyVex1 = /\bvex\s*1\b/.test(gameTitle);
+	var isChromebookLike =
+		(/\bCrOS\b/i.test(navigator.userAgent || "") || /\bChromebook\b/i.test(navigator.userAgent || "")) &&
+		!/\bAndroid\b/i.test(navigator.userAgent || "");
+	var skipBlobMaterialization = isChromebookLike && (isFlashGame || isLikelyVex1);
 
 	var shouldMaterializeHtml =
-		Boolean(options?.useBlob) || /\.html?(?:[?#]|$)/i.test(finalUrl);
+		!skipBlobMaterialization &&
+		(Boolean(options?.useBlob) || /\.html?(?:[?#]|$)/i.test(finalUrl));
 	if (shouldMaterializeHtml) {
 		try {
 			finalUrl = await materializeGameBlobUrl(finalUrl);
@@ -10962,17 +10980,24 @@ async function maybeRecoverRawHtmlCatalogGame(tabId, frameElement) {
 	if (!tab) return;
 
 	var currentUrl = String(tab.url || "").trim();
-	if (!/^https?:\/\//i.test(currentUrl)) return;
-	if (!/\.html?(?:[?#]|$)/i.test(currentUrl)) return;
-	if (!isCatalogGameUrl(currentUrl)) return;
-	if (rawHtmlFallbackTriedUrlByTab.get(tabId) === currentUrl) return;
+	var canonicalCatalogUrl = String(canonicalGameUrlByTab.get(tabId) || "").trim();
+	var hasCatalogContext = Boolean(canonicalCatalogUrl) || isCatalogGameUrl(currentUrl);
+	if (!hasCatalogContext) return;
+
+	var htmlLikeTarget =
+		/\.html?(?:[?#]|$)/i.test(currentUrl) || /\.html?(?:[?#]|$)/i.test(canonicalCatalogUrl);
+	if (!htmlLikeTarget) return;
+
+	var fallbackKey = currentUrl || canonicalCatalogUrl;
+	if (rawHtmlFallbackTriedUrlByTab.get(tabId) === fallbackKey) return;
 
 	var targetWindow = frameElement?.contentWindow;
 	var targetDocument = targetWindow?.document;
 	if (!targetDocument || !looksLikeRawHtmlSourceDocument(targetDocument)) return;
 
-	rawHtmlFallbackTriedUrlByTab.set(tabId, currentUrl);
-	var recoveredInPlace = recoverRawHtmlByDocumentWrite(targetDocument, currentUrl);
+	rawHtmlFallbackTriedUrlByTab.set(tabId, fallbackKey);
+	var recoveryBaseUrl = /^https?:\/\//i.test(currentUrl) ? currentUrl : canonicalCatalogUrl;
+	var recoveredInPlace = recoverRawHtmlByDocumentWrite(targetDocument, recoveryBaseUrl || currentUrl);
 	if (recoveredInPlace) return;
 
   return;
