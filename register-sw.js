@@ -1,6 +1,7 @@
 "use strict";
-const stockSW = "./sw.js?v=11";
-const swReadyTimeoutMs = 4000;
+const stockSW = "./sw.js?v=12";
+const swReadyTimeoutMs = 10000;
+const swControllerTimeoutMs = 8000;
 
 /**
  * List of hostnames that are allowed to run serviceworkers on http://
@@ -103,8 +104,8 @@ async function registerSW() {
 			};
 			const onControllerChange = () => finish();
 			navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
-			setTimeout(finish, 1500);
-		}), swReadyTimeoutMs, null);
+			setTimeout(finish, swControllerTimeoutMs);
+		}), swReadyTimeoutMs + swControllerTimeoutMs, null);
 	}
 
 	return registration;

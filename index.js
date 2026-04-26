@@ -481,6 +481,8 @@ var connection = null;
 var runtimeInitPromise = null;
 var scramjetInitPromise = null;
 var uvRuntimePromise = null;
+var serviceWorkerReadyPromise = null;
+var proxyRuntimePreloadScheduled = false;
 var tabs = [];
 var activeTabId = null;
 var nextTabId = 1;
@@ -620,6 +622,47 @@ function isRecoverableBareMuxError(error) {
 	);
 }
 
+function waitForServiceWorkerController(timeoutMs = 9000) {
+	return new Promise((resolve) => {
+		if (!("serviceWorker" in navigator)) {
+			resolve(false);
+			return;
+		}
+		if (navigator.serviceWorker.controller) {
+			resolve(true);
+			return;
+		}
+		var settled = false;
+		var timer = setTimeout(() => finish(false), timeoutMs);
+		function finish(value) {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timer);
+			navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
+			resolve(Boolean(value));
+		}
+		function onControllerChange() {
+			finish(Boolean(navigator.serviceWorker.controller));
+		}
+		navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
+	});
+}
+
+async function ensureServiceWorkerRuntimeReady() {
+	if (!canUseProxyRuntimeOnThisOrigin()) return false;
+	if (serviceWorkerReadyPromise) return serviceWorkerReadyPromise;
+	serviceWorkerReadyPromise = (async () => {
+		await registerSW();
+		if (navigator.serviceWorker?.controller) return true;
+		await waitForServiceWorkerController(9000);
+		return Boolean(navigator.serviceWorker?.controller);
+	})().catch((error) => {
+		serviceWorkerReadyPromise = null;
+		throw error;
+	});
+	return serviceWorkerReadyPromise;
+}
+
 async function initializeProxyRuntime() {
 	if (getProxyMode() === "ultraviolet") {
 		await ensureUvRuntime();
@@ -630,7 +673,10 @@ async function initializeProxyRuntime() {
 		runtimeInitPromise = (async () => {
 			var bareMuxModule = await ensureBareMuxGlobal();
 			connection = createBareMuxConnection(bareMuxModule);
-			await registerSW();
+			var hasController = await ensureServiceWorkerRuntimeReady();
+			if (!hasController) {
+				throw new Error("Service worker is installed but not controlling this page yet.");
+			}
 			return { connection };
 		})().catch((error) => {
 			runtimeInitPromise = null;
@@ -7761,6 +7807,7 @@ async function init() {
 	loadAiMode();
 	createTab("");
 	loadProxySettings();
+	scheduleProxyRuntimePreload();
 	bindEvents();
 	showUpdatePopupIfNeeded();
 	renderHistory();
@@ -9928,6 +9975,30 @@ async function ensureTransport() {
 		}
 	}
 	throw lastError || new Error("Unable to establish proxy transport.");
+}
+
+function scheduleProxyRuntimePreload() {
+	if (proxyRuntimePreloadScheduled) return;
+	if (!canUseProxyRuntimeOnThisOrigin()) return;
+	proxyRuntimePreloadScheduled = true;
+	runWhenIdle(async () => {
+		try {
+			await ensureServiceWorkerRuntimeReady();
+		} catch (error) {
+			console.warn("[frosted] service worker warmup failed during preload.", error);
+		}
+
+		await Promise.allSettled([
+			ensureUvRuntime(),
+			loadScriptOnce(withRuntimeAssetVersion(`${appBasePath}scram/scramjet.all.js`)),
+		]);
+
+		if (getProxyMode() === "scramjet") {
+			initializeProxyRuntime().catch((error) => {
+				console.warn("[frosted] scramjet runtime preload failed.", error);
+			});
+		}
+	}, 900);
 }
 
 var transportWarmupScheduled = false;
