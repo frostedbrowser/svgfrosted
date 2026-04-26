@@ -8768,7 +8768,6 @@ function isSameAppOriginUrl(rawUrl) {
 		var parsed = new URL(String(rawUrl || "").trim(), window.location.href);
 		if (parsed.origin !== window.location.origin) return false;
 		var path = String(parsed.pathname || "");
-		// Allow proxied same-origin routes; these are expected navigation targets.
 		if (
 			path.startsWith(uvPrefix) ||
 			path.startsWith("/uv/service/") ||
@@ -8777,8 +8776,6 @@ function isSameAppOriginUrl(rawUrl) {
 		) {
 			return false;
 		}
-		// Only block same-origin URLs that are inside Frosted's own app path.
-		// Same-origin external content (e.g. other jsDelivr GH paths) should be loadable.
 		return path.startsWith(appBasePath);
 	} catch {
 		return false;
@@ -11257,7 +11254,6 @@ async function fetchAiResponse(prompt, onChunk) {
 					lastError = new Error(
 						`Groq API error (${response.status})${detail ? `: ${detail.slice(0, 220)}` : ""}`
 					);
-					// Keep trying other endpoints/models for 4xx request-shape/model issues.
 					if (response.status >= 400 && response.status < 500) continue;
 					throw lastError;
 				}
