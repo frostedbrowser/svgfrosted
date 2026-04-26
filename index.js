@@ -9377,9 +9377,13 @@ function startScramjetEarlyReadyPoll(tabId, frameElement) {
 
 function ensureTabFrame(tabId) {
 	var existing = tabFrames.get(tabId);
-	if (existing) return existing;
-
 	var proxyMode = getProxyMode();
+	if (existing) {
+		var existingMode = String(existing.element?.dataset?.proxyMode || "").trim().toLowerCase();
+		if (existingMode === proxyMode) return existing;
+		destroyTabFrame(tabId);
+	}
+
 	var created =
 		proxyMode === "ultraviolet"
 			? {
