@@ -17,6 +17,7 @@ let scramjet = new ScramjetServiceWorker();
 let scramjetCircuitOpen = false;
 let scramjetReadyPromise = Promise.resolve(null);
 let scramjetUnhandledSchemaMismatchSeen = false;
+const scramjetAssetVersion = "6";
 
 self.addEventListener("unhandledrejection", (event) => {
 	const reason = event?.reason;
@@ -158,6 +159,13 @@ function getScramjetPrefixPath() {
 	return `${getAppBasePath()}scramjet/`.replace(/\/{2,}/g, "/");
 }
 
+function withScramjetAssetVersion(path) {
+	const basePath = String(path || "").trim();
+	if (!basePath) return "";
+	const separator = basePath.includes("?") ? "&" : "?";
+	return `${basePath}${separator}v=${scramjetAssetVersion}`;
+}
+
 function getDefaultScramjetCodecConfig() {
 	return {
 		encode: "(value) => (value ? encodeURIComponent(value) : value)",
@@ -210,9 +218,9 @@ function getDefaultScramjetConfig() {
 			tempunusedid: "$scramjet$tempunused",
 		},
 		files: {
-			wasm: `${appBasePath}scram/scramjet.wasm.wasm`,
-			all: `${appBasePath}scram/scramjet.all.js`,
-			sync: `${appBasePath}scram/scramjet.sync.js`,
+			wasm: withScramjetAssetVersion(`${appBasePath}scram/scramjet.wasm.wasm`),
+			all: withScramjetAssetVersion(`${appBasePath}scram/scramjet.all.js`),
+			sync: withScramjetAssetVersion(`${appBasePath}scram/scramjet.sync.js`),
 		},
 		flags: {
 			serviceworkers: false,

@@ -282,7 +282,8 @@ var { errorPanel, errorTitle, errorDetails } = errorRefs;
 
 var { proxySelect, proxyStatus } = proxyRefs;
 var proxyModeStorage = "fb_proxy_mode";
-var defaultWispUrl = "wss://fern.best/wisp/";
+var defaultWispUrl = "wss://stellite.games/wisp/";
+var proxyRuntimeAssetVersion = "6";
 
 function normalizeProxyMode(value) {
 	var normalized = String(value || "").trim().toLowerCase();
@@ -469,11 +470,11 @@ function hintAssetOnce(rel, href, asType, crossOrigin = false) {
 }
 
 function prefetchProxyAssets() {
-	hintAssetOnce("prefetch", `${appBasePath}scram/scramjet.all.js?v=6`, "script");
-	hintAssetOnce("prefetch", `${appBasePath}scram/scramjet.sync.js`, "script");
-	hintAssetOnce("prefetch", `${appBasePath}scram/scramjet.wasm.wasm`, "fetch", true);
-	hintAssetOnce("prefetch", `${appBasePath}uv/uv.bundle.js`, "script");
-	hintAssetOnce("prefetch", `${appBasePath}uv/uv.config.js`, "script");
+	hintAssetOnce("prefetch", withRuntimeAssetVersion(`${appBasePath}scram/scramjet.all.js`), "script");
+	hintAssetOnce("prefetch", withRuntimeAssetVersion(`${appBasePath}scram/scramjet.sync.js`), "script");
+	hintAssetOnce("prefetch", withRuntimeAssetVersion(`${appBasePath}scram/scramjet.wasm.wasm`), "fetch", true);
+	hintAssetOnce("prefetch", withRuntimeAssetVersion(`${appBasePath}uv/uv.bundle.js`), "script");
+	hintAssetOnce("prefetch", withRuntimeAssetVersion(`${appBasePath}uv/uv.config.js`), "script");
 }
 var scramjet = null;
 var connection = null;
@@ -519,6 +520,19 @@ function isMissingObjectStoreError(error) {
 		error?.name === "NotFoundError" &&
 		String(error?.message || "").toLowerCase().includes("object store")
 	);
+}
+
+function isDbConnectionClosedError(error) {
+	var name = String(error?.name || "");
+	var message = String(error?.message || "").toLowerCase();
+	return name === "AbortError" || message.includes("connection was closed");
+}
+
+function withRuntimeAssetVersion(path) {
+	var basePath = String(path || "").trim();
+	if (!basePath) return "";
+	var separator = basePath.includes("?") ? "&" : "?";
+	return `${basePath}${separator}v=${proxyRuntimeAssetVersion}`;
 }
 
 function deleteIndexedDb(databaseName) {
@@ -572,10 +586,10 @@ async function ensureUvRuntime() {
 	if (uvRuntimePromise) return uvRuntimePromise;
 	uvRuntimePromise = (async () => {
 		if (!window.Ultraviolet) {
-			await loadScriptOnce(`${appBasePath}uv/uv.bundle.js`);
+			await loadScriptOnce(withRuntimeAssetVersion(`${appBasePath}uv/uv.bundle.js`));
 		}
 		if (!window.__uv$config?.encodeUrl) {
-			await loadScriptOnce(`${appBasePath}uv/uv.config.js`);
+			await loadScriptOnce(withRuntimeAssetVersion(`${appBasePath}uv/uv.config.js`));
 		}
 		if (!window.__uv$config?.encodeUrl) {
 			throw new Error("Ultraviolet runtime failed to load.");
@@ -638,7 +652,7 @@ async function initializeProxyRuntime() {
 
 	scramjetInitPromise = (async () => {
 		if (typeof window.$scramjetLoadController !== "function") {
-			await loadScriptOnce(`${appBasePath}scram/scramjet.all.js?v=6`);
+			await loadScriptOnce(withRuntimeAssetVersion(`${appBasePath}scram/scramjet.all.js`));
 		}
 		var loadController =
 			typeof window.$scramjetLoadController === "function" ? window.$scramjetLoadController : $scramjetLoadController;
@@ -650,17 +664,17 @@ async function initializeProxyRuntime() {
 			new ScramjetController({
 				prefix: scramjetPrefix,
 				files: {
-					wasm: `${appBasePath}scram/scramjet.wasm.wasm`,
-					all: `${appBasePath}scram/scramjet.all.js`,
-					sync: `${appBasePath}scram/scramjet.sync.js`,
+					wasm: withRuntimeAssetVersion(`${appBasePath}scram/scramjet.wasm.wasm`),
+					all: withRuntimeAssetVersion(`${appBasePath}scram/scramjet.all.js`),
+					sync: withRuntimeAssetVersion(`${appBasePath}scram/scramjet.sync.js`),
 				},
 			});
 		scramjet = createScramjet();
 		try {
 			await scramjet.init();
 		} catch (error) {
-			if (!isMissingObjectStoreError(error)) throw error;
-			console.warn("[frosted] scramjet IndexedDB schema mismatch detected; recreating $scramjet database.");
+			if (!isMissingObjectStoreError(error) && !isDbConnectionClosedError(error)) throw error;
+			console.warn("[frosted] scramjet IndexedDB/config issue detected; recreating $scramjet database.");
 			await deleteIndexedDb("$scramjet");
 			scramjet = createScramjet();
 			await scramjet.init();
@@ -7762,6 +7776,11 @@ function bindServiceWorkerProxyFallbackListener() {
 		var data = event?.data || {};
 		if (String(data.type || "") !== "frosted:proxy-fallback") return;
 		if (String(data.proxy || "") !== "ultraviolet") return;
+		transportReady = false;
+		connection = null;
+		runtimeInitPromise = null;
+		scramjetInitPromise = null;
+		scramjet = null;
 		if (proxyStatus) {
 			proxyStatus.textContent = "Scramjet reported an error. Switch to Ultraviolet if pages fail.";
 		}
@@ -9795,8 +9814,24 @@ function isLikelyStaticHostForWisp(hostname) {
 }
 
 function getWispTransportCandidates() {
-	var forced = normalizeWispUrl("wss://fern.best/wisp/");
-	return forced ? [forced] : [defaultWispUrl];
+	var candidates = [];
+	var addCandidate = (rawUrl) => {
+		var normalized = normalizeWispUrl(rawUrl);
+		if (!normalized) return;
+		if (candidates.includes(normalized)) return;
+		candidates.push(normalized);
+	};
+
+	addCandidate(window?._CONFIG?.WISP_URL);
+	addCandidate(window?.WISP_URL);
+	addCandidate(defaultWispUrl);
+	addCandidate("wss://stellite.games/wisp/");
+
+	if (!isLikelyStaticHostForWisp(window.location.hostname)) {
+		addCandidate(`${window.location.origin.replace(/\/+$/, "")}/wisp/`);
+	}
+
+	return candidates.length ? candidates : [defaultWispUrl];
 }
 
 async function getReachableWispCandidates(candidates) {
@@ -10934,6 +10969,7 @@ async function fetchAiResponse(prompt, onChunk) {
 					lastError = new Error(
 						`Groq API error (${response.status})${detail ? `: ${detail.slice(0, 220)}` : ""}`
 					);
+					// Keep trying other endpoints/models for 4xx request-shape/model issues.
 					if (response.status >= 400 && response.status < 500) continue;
 					throw lastError;
 				}
