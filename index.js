@@ -10671,8 +10671,17 @@ async function openGameFromCatalog(url, options = {}) {
 	if (!tab) return;
 	canonicalGameUrlByTab.set(tab.id, url);
 	restoredGameProgressMarkerByTab.delete(tab.id);
- 	var finalUrl = url;
- 	rawHtmlFallbackTriedUrlByTab.delete(tab.id);
+	var finalUrl = String(url || "");
+	rawHtmlFallbackTriedUrlByTab.delete(tab.id);
+
+	var shouldMaterializeHtml =
+		Boolean(options?.useBlob) || /\.html?(?:[?#]|$)/i.test(finalUrl);
+	if (shouldMaterializeHtml) {
+		try {
+			finalUrl = await materializeGameBlobUrl(finalUrl);
+		} catch {
+		}
+	}
 
 	var previousBlob = gameBlobUrlsByTab.get(tab.id);
 	if (previousBlob && previousBlob !== finalUrl) {
@@ -10787,7 +10796,26 @@ function resolveGameUrl(url) {
 }
 
 async function materializeGameBlobUrl(url) {
-  return String(url || "");
+	var target = String(url || "").trim();
+	if (!target) return "";
+	if (!/^https?:\/\//i.test(target)) return target;
+	if (!/\.html?(?:[?#]|$)/i.test(target)) return target;
+	try {
+		var response = await fetch(target, { cache: "no-store" });
+		if (!response.ok) return target;
+		var rawHtml = await response.text();
+		if (!String(rawHtml || "").trim()) return target;
+		var contentType = String(response.headers.get("content-type") || "").toLowerCase();
+		var htmlLikeContent =
+			contentType.includes("text/html") ||
+			/^\s*(?:<!doctype\s+html|<html\b|<head\b|<body\b)/i.test(rawHtml);
+		if (!htmlLikeContent) return target;
+		var patchedHtml = ensureHtmlHasBase(rawHtml, response.url || target);
+		var blob = new Blob([patchedHtml], { type: "text/html;charset=utf-8" });
+		return URL.createObjectURL(blob);
+	} catch {
+		return target;
+	}
 }
 
 async function solveAiPrompt() {
