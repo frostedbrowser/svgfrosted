@@ -8766,7 +8766,18 @@ function getDisplayTitle(url) {
 function isSameAppOriginUrl(rawUrl) {
 	try {
 		var parsed = new URL(String(rawUrl || "").trim(), window.location.href);
-		return parsed.origin === window.location.origin;
+		if (parsed.origin !== window.location.origin) return false;
+		var path = String(parsed.pathname || "");
+		// Allow proxied same-origin routes; these are expected navigation targets.
+		if (
+			path.startsWith(uvPrefix) ||
+			path.startsWith("/uv/service/") ||
+			path.startsWith(scramjetPrefix) ||
+			path.startsWith("/scramjet/")
+		) {
+			return false;
+		}
+		return true;
 	} catch {
 		return false;
 	}
